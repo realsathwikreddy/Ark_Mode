@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Questline</string>
-    <string name="title_activity_main">Questline</string>
-    <string name="package_name">com.john.questline</string>
-    <string name="custom_url_scheme">com.john.questline</string>
+    <string name="app_name">Ark Mode</string>
+    <string name="title_activity_main">Ark Mode</string>
+    <string name="package_name">com.john.arkmode</string>
+    <string name="custom_url_scheme">com.john.arkmode</string>
 </resources>

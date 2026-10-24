@@ -1,6 +1,6 @@
 {
-  "appId": "com.john.questline",
-  "appName": "Questline",
+  "appId": "com.john.arkmode",
+  "appName": "Ark Mode",
   "webDir": "dist",
   "android": {
     "backgroundColor": "#121827"
@@ -8,7 +8,7 @@
   "plugins": {
     "LocalNotifications": {
       "iconColor": "#8c9eff",
-      "smallIcon": "ic_stat_questline"
+      "smallIcon": "ic_stat_arkmode"
     }
   }
 }

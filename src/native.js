@@ -76,7 +76,7 @@ export async function scheduleFocusEnd(running) {
 }
 
 export async function shareBackup(json) {
-  const name = `questline-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const name = `arkmode-backup-${new Date().toISOString().slice(0, 10)}.json`;
   if (!isNative) {
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -85,6 +85,6 @@ export async function shareBackup(json) {
     return 'Backup downloaded.';
   }
   const res = await Filesystem.writeFile({ path: name, data: json, directory: Directory.Cache, encoding: Encoding.UTF8 });
-  await Share.share({ title: 'Questline backup', files: [res.uri], dialogTitle: 'Save your backup' });
+  await Share.share({ title: 'Ark Mode backup', files: [res.uri], dialogTitle: 'Save your backup' });
   return 'Backup ready to save.';
 }

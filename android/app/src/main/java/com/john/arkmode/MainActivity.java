@@ -1,4 +1,4 @@
-package com.john.questline;
+package com.john.arkmode;
 
 import com.getcapacitor.BridgeActivity;
 

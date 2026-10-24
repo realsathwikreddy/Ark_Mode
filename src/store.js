@@ -3,7 +3,7 @@ import { Preferences } from '@capacitor/preferences';
 import * as E from './engine.js';
 import { seedPTs, seedBacklog, seedTasks, seedRewards } from './seed.js';
 
-const KEY = 'questline-state-v1';
+const KEY = 'arkmode-state-v1';
 let state = null;
 const listeners = new Set();
 let saveTimer = null;
@@ -321,12 +321,12 @@ export function stopFocus(completed) {
 // ---------- backup ----------
 export function exportData() {
   const { toasts, checkin, ...rest } = state;
-  return JSON.stringify({ app: 'questline', exportedAt: new Date().toISOString(), data: rest }, null, 1);
+  return JSON.stringify({ app: 'arkmode', exportedAt: new Date().toISOString(), data: rest }, null, 1);
 }
 export function importData(text) {
   const parsed = JSON.parse(text);
   const data = parsed.data || parsed;
-  if (!data.user || !Array.isArray(data.tasks)) throw new Error('This file is not a Questline backup.');
+  if (!data.user || !Array.isArray(data.tasks)) throw new Error('This file is not an Ark Mode backup.');
   setState({ ...initialState(), ...data, toasts: [], checkin: null });
 }
 export function resetAll() {
