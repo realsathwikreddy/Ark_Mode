@@ -1,3 +1,5 @@
+def arkVersionCode = Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+
 apply plugin: 'com.android.application'
 
 android {
@@ -7,8 +9,8 @@ android {
         applicationId "com.john.arkmode"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode (System.getenv("VERSION_CODE") ?: "1").toInteger()
-        versionName "1." + (System.getenv("VERSION_CODE") ?: "0")
+        versionCode arkVersionCode
+        versionName "1.${arkVersionCode}"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
