@@ -1,0 +1,14 @@
+{
+  "appId": "com.john.questline",
+  "appName": "Questline",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#121827"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#8c9eff",
+      "smallIcon": "ic_stat_questline"
+    }
+  }
+}
