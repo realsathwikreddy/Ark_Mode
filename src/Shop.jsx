@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import * as S from './store.js';
 import { Icon, Sheet, fmtGold } from './ui.jsx';
+import { burst, centerOf } from './fx.js';
 
 export function ShopScreen({ state }) {
   const [editing, setEditing] = useState(null);
@@ -20,7 +21,7 @@ export function ShopScreen({ state }) {
             <span class="task-title">{r.text}</span>
             {r.notes && <span class="task-meta">{r.notes}</span>}
           </button>
-          <button class="buy" disabled={gp < r.cost} onClick={() => S.buyReward(r.id)} aria-label={`Buy ${r.text} for ${r.cost} gold`}>
+          <button class="buy" disabled={gp < r.cost} onClick={(e) => { const el = e.currentTarget; if (S.buyReward(r.id)) { const c = centerOf(el); burst(c.x, c.y, 'var(--gold)', 14, 60); } }} aria-label={`Buy ${r.text} for ${r.cost} gold`}>
             <span class="coin" />{r.cost}
           </button>
         </div>

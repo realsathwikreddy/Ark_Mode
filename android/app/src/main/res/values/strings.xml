@@ -4,4 +4,5 @@
     <string name="title_activity_main">Ark Mode</string>
     <string name="package_name">com.john.arkmode</string>
     <string name="custom_url_scheme">com.john.arkmode</string>
+    <string name="widget_desc">Health, dailies left and this week\'s boss</string>
 </resources>

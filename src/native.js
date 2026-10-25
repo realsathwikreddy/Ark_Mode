@@ -1,17 +1,61 @@
 // Phone features: reminders, focus-timer alerts, backups, back button, haptics.
 // Each call fails quietly in a desktop browser, so the app also runs there for testing.
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import * as E from './engine.js';
 
 export const isNative = Capacitor.isNativePlatform();
 
-export async function tap() {
+let hapticsOn = true;
+export function setHapticsEnabled(v) { hapticsOn = v; }
+
+// kind: light | medium | heavy | success | warning | long
+export async function haptic(kind = 'light') {
+  if (!isNative || !hapticsOn) return;
+  try {
+    if (kind === 'success') await Haptics.notification({ type: NotificationType.Success });
+    else if (kind === 'warning') await Haptics.notification({ type: NotificationType.Warning });
+    else if (kind === 'long') await Haptics.vibrate({ duration: 450 });
+    else await Haptics.impact({ style: kind === 'heavy' ? ImpactStyle.Heavy : kind === 'medium' ? ImpactStyle.Medium : ImpactStyle.Light });
+  } catch {}
+}
+export const tap = () => haptic('light');
+
+// ---------- home-screen widget ----------
+const WidgetBridge = registerPlugin('WidgetBridge');
+let lastWidget = '';
+export async function updateWidget(state) {
   if (!isNative) return;
-  try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+  const u = state.user;
+  const ds = state.settings.dayStart ?? 3;
+  const day = E.dayKey(Date.now(), ds);
+  const due = state.tasks.filter((t) => E.isDue(t, day));
+  const b = state.boss && state.boss.status === 'active' ? state.boss : null;
+  const payload = {
+    lvl: u.lvl,
+    hp: Math.max(0, Math.round(u.hp)),
+    hpMax: E.MAX_HP,
+    exp: u.exp,
+    expMax: E.toNextLevel(u.lvl),
+    gold: (Math.floor(u.gp * 10) / 10).toFixed(1),
+    dailiesLeft: due.filter((t) => !t.completed).length,
+    dailiesTotal: due.length,
+    day,
+    dayStart: ds,
+    rest: !!state.settings.restMode,
+    hasBoss: !!b,
+    bossName: b ? b.name : '',
+    bossHp: b ? b.hp : 0,
+    bossMax: b ? b.maxHp : 1,
+    bossEnd: b ? b.end : '',
+  };
+  const key = JSON.stringify(payload);
+  if (key === lastWidget) return;
+  lastWidget = key;
+  try { await WidgetBridge.update(payload); } catch (e) { console.warn('widget', e); }
 }
 
 export async function askNotificationPermission() {

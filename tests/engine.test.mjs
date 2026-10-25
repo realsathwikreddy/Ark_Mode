@@ -63,3 +63,21 @@ const e3 = daily({ frequency: 'every', everyX: 3, startDate: '2026-10-24' });
 assert.ok(E.isDue(e3, '2026-10-27')); assert.ok(!E.isDue(e3, '2026-10-26'));
 
 console.log('engine: all tests passed');
+
+// ---------- bosses ----------
+{
+  const pts = [{ n: 13, papers: [{ kind: 'mains', date: '2026-10-31' }] }, { n: 14, papers: [{ kind: 'mains', date: '2026-11-07' }] }];
+  assert.equal(E.bossPTFor(pts, '2026-10-25'), null);           // Sunday before: no boss yet
+  assert.equal(E.bossPTFor(pts, '2026-10-26').n, 13);           // Monday: PT-13 boss
+  assert.equal(E.bossPTFor(pts, '2026-10-31').n, 13);           // Saturday paper day: still on
+  assert.equal(E.bossPTFor(pts, '2026-11-01'), null);           // Sunday after
+  assert.equal(E.bossPTFor(pts, '2026-10-27', [13]), null);     // already fought
+  assert.equal(E.bossDamage(1.5), 15);
+  assert.equal(E.bossCounter([{ hp: -2 }, { hp: -0.4 }]), 2);   // 1 + 1 (min 1 each)
+  const h = E.hurt({ hp: 3, exp: 10, lvl: 4, gp: 9 }, 5);
+  assert.equal(h.lvl, 3); assert.equal(h.gp, 0); assert.equal(h.hp, 50);
+  // a solid day (~9 gold) should take about a fifth of a level-1 boss
+  const frac = E.bossDamage(9) / E.bossMaxHp(1);
+  assert.ok(frac > 0.18 && frac < 0.22, `solid day = ${frac}`);
+}
+console.log('bosses: all tests passed');

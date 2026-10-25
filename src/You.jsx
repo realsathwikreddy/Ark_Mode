@@ -2,7 +2,10 @@ import { useRef, useState } from 'preact/hooks';
 import * as S from './store.js';
 import * as E from './engine.js';
 import { Switch, fmtDate, fmtGold, DAY_LETTERS } from './ui.jsx';
-import { askNotificationPermission, shareBackup, isNative } from './native.js';
+import { askNotificationPermission, shareBackup, isNative, haptic } from './native.js';
+import { ACHIEVEMENTS, ICONS } from './achievements.js';
+import { BossArt } from './bosses.jsx';
+import { sfx } from './sfx.js';
 
 export function YouScreen({ state }) {
   const today = S.today();
@@ -23,6 +26,8 @@ export function YouScreen({ state }) {
       </div>
       <Week state={state} />
       <Stats state={state} />
+      <Achievements state={state} />
+      <Trophies state={state} />
       <Settings state={state} />
       <Backup />
     </>
@@ -87,6 +92,54 @@ function Stats({ state }) {
   );
 }
 
+function Achievements({ state }) {
+  const [open, setOpen] = useState(null);
+  const have = state.achievements || {};
+  const count = ACHIEVEMENTS.filter((a) => have[a.id]).length;
+  const a = open && ACHIEVEMENTS.find((x) => x.id === open);
+  return (
+    <div class="section">
+      <div class="section-head"><h2>Achievements</h2><span class="small muted">{count} of {ACHIEVEMENTS.length}</span></div>
+      <div class="card">
+        <div class="badges">
+          {ACHIEVEMENTS.map((x) => (
+            <button key={x.id} class={`badge ${have[x.id] ? 'on' : ''}`} onClick={() => setOpen(open === x.id ? null : x.id)} aria-label={`${x.name}${have[x.id] ? ', unlocked' : ', locked'}`}>
+              <span class="badge-hex">
+                <svg class="hex" viewBox="0 0 54 60" aria-hidden="true"><polygon points="27,2 51,15.5 51,44.5 27,58 3,44.5 3,15.5" /></svg>
+                <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d={ICONS[x.icon]} /></svg>
+              </span>
+              {x.name}
+            </button>
+          ))}
+        </div>
+        {a && (
+          <p class="small" style="margin:14px 0 0">
+            <b>{a.name}:</b> {a.desc} <span class="muted">{have[a.id] ? `Unlocked ${fmtDate(have[a.id])}.` : 'Locked.'}</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Trophies({ state }) {
+  const list = (state.bossHistory || []).slice().reverse();
+  if (!list.length) return null;
+  return (
+    <div class="section">
+      <div class="section-head"><h2>Bosses</h2><span class="small muted">{list.filter((b) => b.result === 'defeated').length} defeated</span></div>
+      <div class="card">
+        {list.map((b) => (
+          <div key={b.n} class="bl">
+            <span style="width:40px;height:40px;flex:none;display:grid;place-items:center"><BossArt n={b.n} class={b.result === 'defeated' ? '' : 'dim'} /></span>
+            <span class="grow"><div>{b.name}</div><div class="small muted">PT-{b.n}, {b.result === 'defeated' ? `defeated ${fmtDate(b.day)}` : 'escaped'}</div></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Settings({ state }) {
   const st = state.settings;
   const set = S.setSetting;
@@ -97,6 +150,14 @@ function Settings({ state }) {
         <div class="setting">
           <div class="grow"><div>Rest mode</div><div class="small muted">Pauses dailies. No damage, streaks kept. For holidays or exam days.</div></div>
           <Switch checked={st.restMode} onChange={(v) => set('restMode', v)} label="Rest mode" />
+        </div>
+        <div class="setting">
+          <div class="grow"><div>Sound effects</div><div class="small muted">Ticks, coins, boss hits, timer chime.</div></div>
+          <Switch checked={st.sound} onChange={(v) => { set('sound', v); if (v) sfx.tick(); }} label="Sound effects" />
+        </div>
+        <div class="setting">
+          <div class="grow"><div>Vibration</div><div class="small muted">Small buzzes on ticks, hits and level-ups.</div></div>
+          <Switch checked={st.haptics} onChange={(v) => { set('haptics', v); if (v) haptic('medium'); }} label="Vibration" />
         </div>
         <div class="setting">
           <div class="grow"><div>Daily reminder</div><div class="small muted">{isNative ? 'Only fires if dailies are still open.' : 'Works in the phone app.'}</div></div>

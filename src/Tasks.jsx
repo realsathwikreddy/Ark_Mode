@@ -3,6 +3,23 @@ import * as S from './store.js';
 import * as E from './engine.js';
 import { Icon, Sheet, fmtDate, relDay, DAY_LETTERS } from './ui.jsx';
 import { tap } from './native.js';
+import { sfx } from './sfx.js';
+import { float, coins, centerOf } from './fx.js';
+import { BossCard } from './Moments.jsx';
+
+// Animate what a tap earned: floating XP, coins flying to the gold counter.
+function showGain(el, gain) {
+  if (!gain || !el) return;
+  const { x, y } = centerOf(el);
+  if (gain.exp > 0) {
+    float(x + 36, y - 30, `+${gain.exp} XP`);
+    coins(x, y, Math.max(1, Math.min(5, Math.round(gain.gp * 2))));
+  } else if (gain.exp < 0) {
+    float(x + 36, y - 30, `${gain.exp} XP`, 'bad');
+  } else if (gain.hp < 0) {
+    float(x + 36, y - 30, `${gain.hp} HP`, 'bad');
+  }
+}
 
 const TABS = [
   { key: 'habit', name: 'Habits' },
@@ -33,6 +50,7 @@ export function TasksScreen({ state, tab, setTab }) {
 
   return (
     <>
+      <BossCard state={state} />
       <div class="seg" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} class={tab === t.key ? 'on' : ''} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
@@ -80,13 +98,30 @@ function TaskRow({ task, today, onEdit }) {
   if (list.length) meta.push(<span>{doneCount}/{list.length}</span>);
   if (task.priority !== 'easy') meta.push(<span>{E.PRIORITY_LABEL[task.priority]}</span>);
 
+  const [popped, setPopped] = useState(false);
+  const tick = (e) => {
+    const el = e.currentTarget;
+    const undo = task.completed;
+    const gain = S.toggleTask(task.id);
+    if (undo) { sfx.untick(); showGain(el, gain); return; }
+    tap(); sfx.tick(); setTimeout(() => sfx.coin(), 120);
+    setPopped(true); setTimeout(() => setPopped(false), 400);
+    showGain(el, gain);
+  };
+  const habit = (dir) => (e) => {
+    const el = e.currentTarget;
+    const gain = S.scoreHabit(task.id, dir);
+    if (dir === 'up') { tap(); sfx.tick(); setTimeout(() => sfx.coin(), 120); }
+    showGain(el, gain);
+  };
+
   return (
     <div>
-      <div class={cls}>
+      <div class={`${cls} ${popped ? 'popped' : ''}`}>
         {task.type === 'habit' ? (
-          <button class="hb" disabled={!task.up} aria-label={`Score ${task.text} up`} onClick={() => { tap(); S.scoreHabit(task.id, 'up'); }}>+</button>
+          <span class="hb-wrap"><button class="hb" disabled={!task.up} aria-label={`Score ${task.text} up`} onClick={habit('up')}>+</button></span>
         ) : (
-          <button class="tick" aria-label={task.completed ? `Untick ${task.text}` : `Tick ${task.text}`} onClick={() => { tap(); S.toggleTask(task.id); }}>
+          <button class="tick" aria-label={task.completed ? `Untick ${task.text}` : `Tick ${task.text}`} onClick={tick}>
             <span class="box">{task.completed && <Icon name="check" size={16} stroke={3} />}</span>
           </button>
         )}
@@ -95,14 +130,14 @@ function TaskRow({ task, today, onEdit }) {
           {meta.length > 0 && <span class="task-meta">{meta}</span>}
         </button>
         {task.type === 'habit' && (
-          <button class="hb" disabled={!task.down} aria-label={`Score ${task.text} down`} onClick={() => { tap(); S.scoreHabit(task.id, 'down'); }}>−</button>
+          <span class="hb-wrap"><button class="hb minus" disabled={!task.down} aria-label={`Score ${task.text} down`} onClick={habit('down')}>−</button></span>
         )}
       </div>
       {showList && (
         <div class="checklist">
           {list.map((c) => (
-            <button key={c.id} class={`check-item ${c.done ? 'on' : ''}`} onClick={() => S.toggleChecklist(task.id, c.id)}>
-              <span class="mini">{c.done && <Icon name="check" size={12} stroke={3} />}</span>
+            <button key={c.id} class={`check-item ${c.done ? 'on' : ''}`} onClick={() => { sfx.tick(); S.toggleChecklist(task.id, c.id); }}>
+              <span class="mini">{c.done && <Icon name="check" size={11} stroke={3} />}</span>
               <span>{c.text}</span>
             </button>
           ))}

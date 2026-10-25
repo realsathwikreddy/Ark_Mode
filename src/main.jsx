@@ -10,7 +10,8 @@ import { ShopScreen } from './Shop.jsx';
 import { TestsScreen } from './Tests.jsx';
 import { StudyScreen } from './Study.jsx';
 import { YouScreen } from './You.jsx';
-import { scheduleReminders, askNotificationPermission, isNative } from './native.js';
+import { scheduleReminders, askNotificationPermission, isNative, updateWidget } from './native.js';
+import { Moments } from './Moments.jsx';
 
 const SCREENS = [
   { key: 'tasks', name: 'Tasks', icon: 'tasks' },
@@ -41,7 +42,7 @@ function Hero({ state }) {
         </div>
       </div>
       <div class="hero-foot">
-        <span class="gold"><span class="coin" />{fmtGold(u.gp)}</span>
+        <span class="gold" id="gold-anchor"><span class="coin" />{fmtGold(u.gp)}</span>
         {state.settings.restMode ? <span class="rest-pill">Resting, dailies paused</span> : <span>{open ? `${open} ${open === 1 ? 'daily' : 'dailies'} left today` : 'All dailies done'}</span>}
       </div>
     </header>
@@ -62,6 +63,8 @@ function App() {
     if (isNative) {
       CapApp.addListener('appStateChange', ({ isActive }) => { if (isActive) S.checkDay(); else S.flush(); }).then((h) => subs.push(h));
       CapApp.addListener('backButton', () => {
+        const st = S.getState();
+        if (st.queue?.length) { S.dismissOverlay(st.queue[0].id); return; }
         if (window.__sheetClose) { window.__sheetClose(); return; }
         setScreen((s) => { if (s !== 'tasks') return 'tasks'; CapApp.minimizeApp(); return s; });
       }).then((h) => subs.push(h));
@@ -69,6 +72,10 @@ function App() {
     }
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); subs.forEach((h) => h.remove()); };
   }, []);
+
+  // Keep the home-screen widget in step with the app.
+  useEffect(() => { const t = setTimeout(() => updateWidget(state), 600); return () => clearTimeout(t); },
+    [state.user, state.tasks, state.boss, state.settings.restMode, state.lastCron]);
 
   // Keep the evening reminder in sync with what's still open.
   useEffect(() => { const t = setTimeout(() => scheduleReminders(state), 800); return () => clearTimeout(t); },
@@ -93,6 +100,7 @@ function App() {
       </nav>
       <div class="toasts" aria-live="polite">{state.toasts.map((t) => <div key={t.id} class={`toast ${t.tone}`}>{t.text}</div>)}</div>
       {state.checkin && <Checkin state={state} />}
+      <Moments state={state} />
     </>
   );
 }

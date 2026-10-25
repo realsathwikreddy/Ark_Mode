@@ -2,7 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import * as S from './store.js';
 import { SUBJECTS, STAGES } from './seed.js';
 import { Icon, Sheet } from './ui.jsx';
-import { scheduleFocusEnd } from './native.js';
+import { scheduleFocusEnd, haptic } from './native.js';
+import { sfx } from './sfx.js';
 
 export function StudyScreen({ state }) {
   return (
@@ -29,8 +30,8 @@ function Focus({ state }) {
   const remaining = run ? Math.max(0, run.start + run.minutes * 60000 - Date.now()) : mins * 60000;
   useEffect(() => {
     if (run && remaining <= 0) {
-      if (run.kind === 'focus') { S.stopFocus(true); scheduleFocusEnd(null); }
-      else { S.stopFocus(true); scheduleFocusEnd(null); }
+      S.stopFocus(true);
+      scheduleFocusEnd(null);
     }
   }, [run, remaining <= 0]);
 
@@ -46,6 +47,7 @@ function Focus({ state }) {
   const bySubj = SUBJECTS.map((s) => ({ ...s, min: state.focus.sessions.filter((x) => x.day === today && x.subj === s.key).reduce((a, x) => a + x.min, 0) }));
 
   const start = () => {
+    sfx.tick(); haptic('light');
     S.setSetting('focusMinutes', mins);
     S.startFocus(mins, SUBJECTS.find((s) => s.key === subj).name, subj);
     scheduleFocusEnd({ start: Date.now(), minutes: mins, kind: 'focus' });
@@ -61,8 +63,8 @@ function Focus({ state }) {
       <div class="card timer">
         <div class="ring">
           <svg viewBox="0 0 220 220" width="220" height="220" aria-hidden="true">
-            <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,.06)" stroke-width="6" />
-            <circle cx="110" cy="110" r={R} fill="none" stroke={ringColor} stroke-width="6" stroke-linecap="round" stroke-dasharray={C} stroke-dashoffset={C * (1 - frac)} style="transition:stroke-dashoffset 1s linear" />
+            <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,.06)" stroke-width="5" />
+            <circle class="arc" cx="110" cy="110" r={R} fill="none" stroke={ringColor} stroke-width="5" stroke-linecap="round" stroke-dasharray={C} stroke-dashoffset={C * (1 - frac)} style={`transition:stroke-dashoffset 1s linear;--ring:${ringColor}`} />
           </svg>
           <div>
             <div class="timer-face">{String(mm).padStart(2, '0')}:{String(ss).padStart(2, '0')}</div>

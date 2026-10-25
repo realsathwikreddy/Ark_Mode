@@ -266,3 +266,45 @@ export function runCron(state, today) {
     report: { day: yday, damage: round1(damage), missed, died: user.events.some((e) => e.kind === 'death'), rest, events: user.events },
   };
 }
+
+// ---------- damage from outside the normal score path (boss hits) ----------
+export function hurt(user0, amount) {
+  const user = { ...user0, events: [] };
+  user.hp = round1(user.hp - Math.abs(amount));
+  applyDeath(user);
+  return user;
+}
+
+// ---------- weekly PT bosses ----------
+// Each PT's boss is fought Monday → Saturday (the Mains paper day).
+export const BOSS_DMG_PER_GOLD = 10;
+export const BOSS_REWARD = { gp: 20, exp: 120 };
+export function bossMaxHp(lvl) {
+  return 450 + 25 * (Math.max(1, lvl) - 1);
+}
+export function bossWindow(pt) {
+  const m = pt.papers.find((p) => p.kind === 'mains') || pt.papers[0];
+  if (!m?.date) return null;
+  return { start: addDays(m.date, -5), end: m.date };
+}
+// The PT whose boss should be active on `today`, skipping ones already fought.
+export function bossPTFor(pts, today, foughtNs = []) {
+  return pts.find((pt) => {
+    if (foughtNs.includes(pt.n)) return false;
+    const w = bossWindow(pt);
+    return w && today >= w.start && today <= w.end;
+  }) || null;
+}
+export function bossDamage(gp) {
+  return Math.round(gp * BOSS_DMG_PER_GOLD);
+}
+// When you miss dailies, the boss hits you for half of each missed daily's damage (at least 1 each).
+export function bossCounter(missed) {
+  return round1(missed.reduce((a, m) => a + Math.max(1, Math.abs(m.hp) * 0.5), 0));
+}
+export function grantFlat(user0, gp, exp) {
+  const user = { ...user0, events: [] };
+  user.gp += gp; user.exp += exp;
+  applyLevels(user);
+  return user;
+}

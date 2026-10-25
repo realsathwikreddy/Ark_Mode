@@ -31,6 +31,9 @@ export function TestsScreen({ state }) {
   const papers = state.pts.flatMap((pt) => pt.papers.filter((p) => p.kind === kind).map((p) => ({ ...p, n: pt.n, ptId: pt.id })));
   const scored = papers.filter((p) => paperTotal(p)?.pct != null).sort((a, b) => a.date.localeCompare(b.date));
   const next = state.pts.find((pt) => pt.papers.some((p) => p.date >= today));
+  const [editTargets, setEditTargets] = useState(false);
+  const targets = state.settings.targets?.[kind] || { m: null, p: null, c: null };
+  const hasTargets = SUBJECTS.some((s) => targets[s.key]);
 
   return (
     <>
@@ -40,13 +43,18 @@ export function TestsScreen({ state }) {
         <button class={kind === 'adv' ? 'on' : ''} onClick={() => setKind('adv')}>Advanced papers</button>
       </div>
 
+      <div class="spread small" style="margin:-2px 0 12px">
+        <span class="muted">{hasTargets ? `Targets: ${SUBJECTS.map((s) => `${s.short} ${targets[s.key] ? targets[s.key] + '%' : '—'}`).join(', ')}` : `No ${kind === 'mains' ? 'Mains' : 'Advanced'} targets set`}</span>
+        <button class="link" onClick={() => setEditTargets(true)}>{hasTargets ? 'Edit targets' : 'Set targets'}</button>
+      </div>
+
       <div class="section">
         {scored.length === 0 ? (
           <div class="empty"><p>No {kind === 'mains' ? 'Mains' : 'Advanced'} scores yet. Open a PT below and enter your marks to start the trend.</p></div>
         ) : (
           <>
             <Summary scored={scored} />
-            <div class="card" style="margin-top:8px"><TrendChart scored={scored} /></div>
+            <div class="card" style="margin-top:8px"><TrendChart key={kind} scored={scored} targets={targets} /></div>
           </>
         )}
       </div>
@@ -77,6 +85,7 @@ export function TestsScreen({ state }) {
           );
         })}
       </div>
+      {editTargets && <TargetsSheet kind={kind} targets={targets} onClose={() => setEditTargets(false)} />}
       {open && <PTSheet pt={state.pts.find((p) => p.id === open)} pts={state.pts} onClose={() => setOpen(null)} />}
     </>
   );
@@ -103,11 +112,11 @@ function Summary({ scored }) {
 }
 
 // Line chart: % per subject across papers, one axis, direct labels + legend, tap a column for values.
-function TrendChart({ scored }) {
+function TrendChart({ scored, targets = {} }) {
   const [sel, setSel] = useState(scored.length - 1);
-  const W = 340, H = 190, L = 30, R = 14, T = 12, B = 26;
+  const W = 340, H = 190, L = 30, R = 26, T = 12, B = 26;
   const iw = W - L - R, ih = H - T - B;
-  const vals = scored.flatMap((p) => SUBJECTS.map((s) => subjPct(p, s.key)).filter((v) => v != null));
+  const vals = [...scored.flatMap((p) => SUBJECTS.map((s) => subjPct(p, s.key)).filter((v) => v != null)), ...SUBJECTS.map((s) => targets[s.key]).filter(Boolean)];
   const lo = Math.min(0, Math.floor(Math.min(...vals) / 10) * 10);
   const hi = 100;
   const x = (i) => L + (scored.length === 1 ? iw / 2 : (i / (scored.length - 1)) * iw);
@@ -124,6 +133,12 @@ function TrendChart({ scored }) {
           <g key={v}>
             <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--line)" stroke-width="1" />
             <text x={L - 6} y={y(v) + 4} font-size="10" fill="var(--faint)" text-anchor="end">{v}</text>
+          </g>
+        ))}
+        {labelYs(SUBJECTS.filter((s) => targets[s.key]).map((s) => ({ s, y: y(targets[s.key]) }))).map(({ s, y: ty, ly }) => (
+          <g key={`t${s.key}`}>
+            <line x1={L} x2={W - R} y1={ty} y2={ty} stroke={`var(--s-${s.key})`} stroke-width="1.2" stroke-dasharray="5 4" opacity=".75" />
+            <text x={W - R + 4} y={ly + 3.5} font-size="10" fill={`var(--s-${s.key})`}>{s.short}</text>
           </g>
         ))}
         <line x1={x(sel)} x2={x(sel)} y1={T} y2={T + ih} stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" />
@@ -150,13 +165,43 @@ function TrendChart({ scored }) {
         <b>{selP.name}, {fmtDate(selP.date)}</b>
         <span class="muted">{paperTotal(selP).pct.toFixed(1)}% overall</span>
       </div>
+      {SUBJECTS.some((s) => targets[s.key]) && <div class="small muted" style="margin-top:2px">Dashed lines are your targets.</div>}
       <div class="legend">
         {SUBJECTS.map((s) => {
           const v = subjPct(selP, s.key);
-          return <span key={s.key}><i class={`subj-dot dot-${s.key}`} />{s.name} {v == null ? '—' : `${v.toFixed(0)}% (${fmtNum(Number(selP.scores[s.key]))}/${selP.max[s.key]})`}</span>;
+          const t = targets[s.key];
+          const hit = t && v != null && v >= t;
+          return <span key={s.key}><i class={`subj-dot dot-${s.key}`} />{s.name} {v == null ? '—' : `${v.toFixed(0)}% (${fmtNum(Number(selP.scores[s.key]))}/${selP.max[s.key]})`}{t ? <b class={hit ? 'hit-target' : ''} style={hit ? '' : 'color:var(--faint);font-weight:400'}>{hit ? ' on target' : ` / ${t}%`}</b> : null}</span>;
         })}
       </div>
     </>
+  );
+}
+
+// Spread target labels so they never sit on top of each other.
+function labelYs(items, gap = 11) {
+  const sorted = [...items].sort((a, b) => a.y - b.y);
+  sorted.forEach((it, i) => { it.ly = i && it.y - sorted[i - 1].ly < gap ? sorted[i - 1].ly + gap : it.y; });
+  return sorted;
+}
+
+function TargetsSheet({ kind, targets, onClose }) {
+  const [t, setT] = useState({ ...targets });
+  const save = () => {
+    SUBJECTS.forEach((s) => S.setTarget(kind, s.key, t[s.key] === '' || t[s.key] == null ? null : Math.max(0, Math.min(100, Number(t[s.key])))));
+    onClose();
+  };
+  return (
+    <Sheet title={`${kind === 'mains' ? 'Mains' : 'Advanced'} targets`} onClose={onClose}
+      actions={<button class="btn" onClick={save}>Save targets</button>}>
+      <p class="small muted" style="margin:-6px 0 14px">The percentage you're aiming for in each subject. They show as dashed lines on the chart. Leave one blank to skip it.</p>
+      {SUBJECTS.map((s) => (
+        <label key={s.key} class="field">
+          <span class="row" style="gap:8px"><i class={`subj-dot dot-${s.key}`} />{s.name} (%)</span>
+          <input class="input" type="number" inputMode="decimal" min="0" max="100" value={t[s.key] ?? ''} placeholder="e.g. 70" onInput={(e) => setT({ ...t, [s.key]: e.target.value })} />
+        </label>
+      ))}
+    </Sheet>
   );
 }
 
