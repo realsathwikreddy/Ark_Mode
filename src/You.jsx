@@ -187,6 +187,10 @@ function Settings({ state }) {
           <Switch checked={st.restMode} onChange={(v) => set('restMode', v)} label="Rest mode" />
         </div>
         <div class="setting">
+          <div class="grow">Your name</div>
+          <input class="input" style="width:150px" value={st.name} onInput={(e) => set('name', e.target.value)} aria-label="Your name" />
+        </div>
+        <div class="setting">
           <div class="grow"><div>App lock</div><div class="small muted">{state.settings.lock.enabled ? `On${state.settings.lock.bio ? ', with fingerprint' : ''}` : 'Off'}</div></div>
           <button class="btn ghost small" onClick={() => setLockOpen(true)}>{state.settings.lock.enabled ? 'Manage' : 'Set PIN'}</button>
         </div>

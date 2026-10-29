@@ -34,7 +34,7 @@ export function HomeScreen({ state, go }) {
   return (
     <div class="home">
       <div class="home-hello">
-        <h1>{greet(new Date().getHours())}, {state.settings.name || 'John'}</h1>
+        <h1>{greet(new Date().getHours())}, {state.settings.name || 'Sathwik'}</h1>
         <span class="muted small">{fmtDate(today, true)}{daysLeft != null && daysLeft > 0 ? `, ${daysLeft} days to ${state.settings.examName || 'the exam'}` : ''}</span>
       </div>
 

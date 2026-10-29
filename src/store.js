@@ -21,7 +21,7 @@ export const today = () => E.dayKey(now(), state?.settings?.dayStart ?? 3);
 
 const emptyTargets = () => ({ mains: { m: null, p: null, c: null }, adv: { m: null, p: null, c: null } });
 const DEFAULT_SETTINGS = {
-  name: 'John', dayStart: 3, restMode: false, reminders: true, reminderTime: '22:00',
+  name: 'Sathwik', dayStart: 3, restMode: false, reminders: true, reminderTime: '22:00',
   examDate: '2027-01-22', examName: 'JEE Main, session 1', focusMinutes: 50, breakMinutes: 10,
   sound: true, haptics: true, targets: emptyTargets(), theme: 'neon',
   lock: { enabled: false, pinHash: null, bio: false },
@@ -86,6 +86,8 @@ export async function loadState() {
     state = initialState();
   }
   if (state.settings.lock?.enabled && state.settings.lock.pinHash) state = { ...state, locked: true };
+  // The name was wrong in earlier versions.
+  if (!state.settings.name || state.settings.name === 'John') state = { ...state, settings: { ...state.settings, name: 'Sathwik' } };
   setSoundEnabled(state.settings.sound);
   setHapticsEnabled(state.settings.haptics);
   // Credit badges already earned before achievements existed, quietly.
