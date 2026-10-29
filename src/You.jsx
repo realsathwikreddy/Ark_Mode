@@ -6,6 +6,11 @@ import { askNotificationPermission, shareBackup, isNative, haptic } from './nati
 import { ACHIEVEMENTS, ICONS } from './achievements.js';
 import { BossArt } from './bosses.jsx';
 import { sfx } from './sfx.js';
+import { THEMES, switchTheme } from './themes.js';
+import { ScreenTimeSection } from './ScreenTime.jsx';
+import { LockSetup } from './Lock.jsx';
+import { buildWorkbook } from './exportxlsx.js';
+import { shareFile } from './native.js';
 
 export function YouScreen({ state }) {
   const today = S.today();
@@ -25,11 +30,13 @@ export function YouScreen({ state }) {
         </div>
       </div>
       <Week state={state} />
+      <ScreenTimeSection state={state} />
       <Stats state={state} />
       <Achievements state={state} />
       <Trophies state={state} />
+      <Appearance state={state} />
       <Settings state={state} />
-      <Backup />
+      <Backup state={state} />
     </>
   );
 }
@@ -140,7 +147,35 @@ function Trophies({ state }) {
   );
 }
 
+function Appearance({ state }) {
+  const cur = state.settings.theme || 'neon';
+  const pick = (id) => (e) => {
+    if (id === cur) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    sfx.whoosh(); haptic('light');
+    switchTheme(id, r.left + r.width / 2, r.top + r.height / 2, () => S.setSetting('theme', id));
+  };
+  return (
+    <div class="section">
+      <div class="section-head"><h2>Theme</h2><span class="small muted">All free</span></div>
+      <div class="themes">
+        {THEMES.map((t) => (
+          <button key={t.id} class={`theme-card ${cur === t.id ? 'on' : ''}`} onClick={pick(t.id)} aria-label={`${t.name} theme${cur === t.id ? ', in use' : ''}`} aria-pressed={cur === t.id}>
+            <span class="theme-sw" style={`background:${t.bg}`}>
+              <i style={`background:${t.a};box-shadow:0 0 ${t.dark ? 10 : 0}px ${t.a}`} />
+              <i style={`background:${t.b};box-shadow:0 0 ${t.dark ? 10 : 0}px ${t.b}`} />
+              <b style={`border-color:${t.a}`} />
+            </span>
+            <span class="theme-n">{t.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Settings({ state }) {
+  const [lockOpen, setLockOpen] = useState(false);
   const st = state.settings;
   const set = S.setSetting;
   return (
@@ -150,6 +185,10 @@ function Settings({ state }) {
         <div class="setting">
           <div class="grow"><div>Rest mode</div><div class="small muted">Pauses dailies. No damage, streaks kept. For holidays or exam days.</div></div>
           <Switch checked={st.restMode} onChange={(v) => set('restMode', v)} label="Rest mode" />
+        </div>
+        <div class="setting">
+          <div class="grow"><div>App lock</div><div class="small muted">{state.settings.lock.enabled ? `On${state.settings.lock.bio ? ', with fingerprint' : ''}` : 'Off'}</div></div>
+          <button class="btn ghost small" onClick={() => setLockOpen(true)}>{state.settings.lock.enabled ? 'Manage' : 'Set PIN'}</button>
         </div>
         <div class="setting">
           <div class="grow"><div>Sound effects</div><div class="small muted">Ticks, coins, boss hits, timer chime.</div></div>
@@ -190,11 +229,12 @@ function Settings({ state }) {
           </select>
         </div>
       </div>
+      {lockOpen && <LockSetup state={state} onClose={() => setLockOpen(false)} />}
     </div>
   );
 }
 
-function Backup() {
+function Backup({ state }) {
   const file = useRef(null);
   const [msg, setMsg] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -219,6 +259,7 @@ function Backup() {
         <div class="row" style="flex-wrap:wrap">
           <button class="btn small" onClick={exp}>Save backup</button>
           <button class="btn ghost small" onClick={() => file.current.click()}>Restore from file</button>
+          <button class="btn ghost small" onClick={async () => { try { setMsg(await shareFile(`arkmode-scores-${new Date().toISOString().slice(0, 10)}.xlsx`, buildWorkbook(state), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')); } catch (e) { setMsg(`Export failed: ${e.message}`); } }}>Export scores to Excel</button>
           <input ref={file} type="file" accept="application/json,.json" style="display:none" onChange={imp} />
         </div>
         {msg && <p class="small" style="margin:10px 0 0">{msg}</p>}

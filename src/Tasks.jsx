@@ -1,11 +1,13 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import * as S from './store.js';
 import * as E from './engine.js';
-import { Icon, Sheet, fmtDate, relDay, DAY_LETTERS } from './ui.jsx';
+import { Icon, Sheet, Fab, fmtDate, relDay, DAY_LETTERS } from './ui.jsx';
 import { tap } from './native.js';
 import { sfx } from './sfx.js';
 import { float, coins, centerOf } from './fx.js';
 import { BossCard } from './Moments.jsx';
+import { disintegrate } from './dust.js';
+import { SUBJECTS } from './seed.js';
 
 // Animate what a tap earned: floating XP, coins flying to the gold counter.
 function showGain(el, gain) {
@@ -29,8 +31,28 @@ const TABS = [
 
 export function TasksScreen({ state, tab, setTab }) {
   const [editing, setEditing] = useState(null);
+  const [tag, setTag] = useState('all');
+  const [vanishing, setVanishing] = useState([]);
   const today = S.today();
-  const list = state.tasks.filter((t) => t.type === tab);
+  const list = state.tasks.filter((t) => t.type === tab && (tag === 'all' || t.tag === tag));
+
+  // Opened from the widget's + button or the dashboard.
+  useEffect(() => { if (state.quickAdd) { setTab('todo'); setEditing(blank('todo', today)); } }, [state.quickAdd]);
+
+  // A finished to-do (or a deleted task) turns to dust before it leaves the list.
+  const vanish = (id, row, after) => {
+    setVanishing((v) => [...v, id]);
+    sfx.dust();
+    disintegrate(row).then(() => {
+      if (row) row.style.visibility = '';
+      if (after) after();
+      setVanishing((v) => v.filter((x) => x !== id));
+    });
+  };
+  const removeTask = (id) => {
+    const row = document.querySelector(`[data-id="${id}"] .task`);
+    if (row) vanish(id, row, () => S.deleteTask(id)); else S.deleteTask(id);
+  };
   const counts = {
     habit: state.tasks.filter((t) => t.type === 'habit').length,
     daily: state.tasks.filter((t) => t.type === 'daily' && E.isDue(t, today) && !t.completed).length,
@@ -44,8 +66,8 @@ export function TasksScreen({ state, tab, setTab }) {
     ordered = [...due.filter((t) => !t.completed), ...due.filter((t) => t.completed), ...notDue];
   }
   if (tab === 'todo') {
-    const open = list.filter((t) => !t.completed).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
-    ordered = [...open, ...list.filter((t) => t.completed)];
+    const open = list.filter((t) => !t.completed || vanishing.includes(t.id)).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+    ordered = [...open, ...list.filter((t) => t.completed && !vanishing.includes(t.id))];
   }
 
   return (
@@ -58,6 +80,10 @@ export function TasksScreen({ state, tab, setTab }) {
           </button>
         ))}
       </div>
+      <div class="chips tag-filter">
+        <button class={`chip ${tag === 'all' ? 'on' : ''}`} onClick={() => setTag('all')}>All</button>
+        {SUBJECTS.map((x) => <button key={x.key} class={`chip ${tag === x.key ? 'on' : ''}`} onClick={() => setTag(tag === x.key ? 'all' : x.key)}><i class={`subj-dot dot-${x.key}`} />{x.name}</button>)}
+      </div>
 
       {ordered.length === 0 ? (
         <div class="empty">
@@ -66,21 +92,21 @@ export function TasksScreen({ state, tab, setTab }) {
         </div>
       ) : (
         <div class="tasks">
-          {ordered.map((t) => <TaskRow key={t.id} task={t} today={today} onEdit={() => setEditing(t)} />)}
+          {ordered.map((t) => <TaskRow key={t.id} task={t} today={today} onEdit={() => setEditing(t)} onVanish={vanish} vanishing={vanishing.includes(t.id)} />)}
         </div>
       )}
 
       {tab === 'todo' && list.some((t) => t.completed) && (
-        <div style="margin-top:14px;text-align:center"><button class="link" onClick={S.clearDoneTodos}>Clear finished to-dos</button></div>
+        <div style="margin-top:14px;text-align:center"><button class="link" onClick={() => { document.querySelectorAll('.task.done').forEach((r, i) => setTimeout(() => disintegrate(r), i * 90)); sfx.dust(); setTimeout(S.clearDoneTodos, 900); }}>Clear finished to-dos</button></div>
       )}
 
-      <button class="fab" aria-label="Add task" onClick={() => setEditing(blank(tab, today))}><Icon name="plus" /></button>
-      {editing && <TaskEditor task={editing} onClose={() => setEditing(null)} />}
+      <Fab label="Add task" onClick={() => setEditing(blank(tab, today))} />
+      {editing && <TaskEditor task={editing} onClose={() => setEditing(null)} onDelete={removeTask} />}
     </>
   );
 }
 
-function TaskRow({ task, today, onEdit }) {
+function TaskRow({ task, today, onEdit, onVanish, vanishing }) {
   const band = `band-${E.valueBand(task.value)}`;
   const due = task.type === 'daily' ? E.isDue(task, today) : true;
   const cls = `task ${band} ${task.completed ? 'done' : ''} ${!due ? 'notdue' : ''}`;
@@ -97,14 +123,20 @@ function TaskRow({ task, today, onEdit }) {
   if (task.type === 'todo' && task.due && !task.completed) meta.push(<span class={task.due < today ? 'late' : ''}>Due {relDay(task.due, today)}</span>);
   if (list.length) meta.push(<span>{doneCount}/{list.length}</span>);
   if (task.priority !== 'easy') meta.push(<span>{E.PRIORITY_LABEL[task.priority]}</span>);
+  if (task.tag) meta.unshift(<span class="tagmeta"><i class={`subj-dot dot-${task.tag}`} />{SUBJECTS.find((x) => x.key === task.tag)?.short}</span>);
+  if (task.type === 'daily' && task.frequency === 'monthly') meta.push(<span>Day {task.dayOfMonth} monthly</span>);
 
   const [popped, setPopped] = useState(false);
+  const [laser, setLaser] = useState(false);
   const tick = (e) => {
     const el = e.currentTarget;
+    const row = el.closest('.task');
     const undo = task.completed;
+    if (!undo && task.type === 'todo') onVanish(task.id, row);
     const gain = S.toggleTask(task.id);
     if (undo) { sfx.untick(); showGain(el, gain); return; }
     tap(); sfx.tick(); setTimeout(() => sfx.coin(), 120);
+    if (task.type === 'daily') { sfx.laser(); setLaser(true); setTimeout(() => setLaser(false), 700); }
     setPopped(true); setTimeout(() => setPopped(false), 400);
     showGain(el, gain);
   };
@@ -116,8 +148,8 @@ function TaskRow({ task, today, onEdit }) {
   };
 
   return (
-    <div>
-      <div class={`${cls} ${popped ? 'popped' : ''}`}>
+    <div data-id={task.id} class={`task-wrap ${vanishing ? 'vanish' : ''}`}>
+      <div class={`${cls} ${popped ? 'popped' : ''} ${laser ? 'laser' : ''}`}>
         {task.type === 'habit' ? (
           <span class="hb-wrap"><button class="hb" disabled={!task.up} aria-label={`Score ${task.text} up`} onClick={habit('up')}>+</button></span>
         ) : (
@@ -154,7 +186,7 @@ function blank(type, today) {
   return { ...base, due: '', completed: false };
 }
 
-function TaskEditor({ task, onClose }) {
+function TaskEditor({ task, onClose, onDelete }) {
   const [t, setT] = useState(task);
   const [item, setItem] = useState('');
   const isNew = !S.getState().tasks.some((x) => x.id === task.id);
@@ -175,7 +207,7 @@ function TaskEditor({ task, onClose }) {
   return (
     <Sheet title={isNew ? `New ${typeName}` : `Edit ${typeName}`} onClose={onClose}
       actions={<>
-        {!isNew && <button class="btn danger" onClick={() => { S.deleteTask(t.id); onClose(); }}>Delete</button>}
+        {!isNew && <button class="btn danger" onClick={() => { onClose(); setTimeout(() => onDelete(t.id), 260); }}>Delete</button>}
         <button class="btn" disabled={!t.text.trim()} onClick={save}>{isNew ? 'Add' : 'Save'}</button>
       </>}>
       <label class="field">Title
@@ -190,6 +222,13 @@ function TaskEditor({ task, onClose }) {
           {Object.keys(E.PRIORITY).map((p) => (
             <button key={p} class={`chip ${t.priority === p ? 'on' : ''}`} onClick={() => set({ priority: p })}>{E.PRIORITY_LABEL[p]}</button>
           ))}
+        </div>
+      </div>
+
+      <div class="field"><span>Subject</span>
+        <div class="chips">
+          <button class={`chip ${!t.tag ? 'on' : ''}`} onClick={() => set({ tag: null })}>None</button>
+          {SUBJECTS.map((x) => <button key={x.key} class={`chip ${t.tag === x.key ? 'on' : ''}`} onClick={() => set({ tag: x.key })}>{x.name}</button>)}
         </div>
       </div>
 
@@ -208,6 +247,7 @@ function TaskEditor({ task, onClose }) {
             <div class="chips">
               <button class={`chip ${t.frequency === 'weekly' ? 'on' : ''}`} onClick={() => set({ frequency: 'weekly' })}>On set weekdays</button>
               <button class={`chip ${t.frequency === 'every' ? 'on' : ''}`} onClick={() => set({ frequency: 'every' })}>Every few days</button>
+              <button class={`chip ${t.frequency === 'monthly' ? 'on' : ''}`} onClick={() => set({ frequency: 'monthly', dayOfMonth: t.dayOfMonth || E.parseKey(S.today()).getDate() })}>Monthly</button>
             </div>
           </div>
           {t.frequency === 'weekly' ? (
@@ -218,6 +258,11 @@ function TaskEditor({ task, onClose }) {
                 ))}
               </div>
             </div>
+          ) : t.frequency === 'monthly' ? (
+            <label class="field">On day of the month
+              <input class="input" type="number" min="1" max="31" value={t.dayOfMonth || 1} onInput={(e) => set({ dayOfMonth: Math.min(31, Math.max(1, +e.target.value || 1)) })} />
+              <span class="small muted">In shorter months it falls on the last day.</span>
+            </label>
           ) : (
             <div class="row" style="margin-bottom:14px">
               <label class="field grow" style="margin:0">Every

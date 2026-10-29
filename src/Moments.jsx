@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import * as S from './store.js';
 import { BossArt } from './bosses.jsx';
 import { burst } from './fx.js';
+import { scramble } from './dust.js';
 import { fmtDate } from './ui.jsx';
 import * as E from './engine.js';
 
@@ -34,13 +35,18 @@ function useBurstOnMount(color, n = 26, delay = 120) {
 }
 
 function Level({ m, close }) {
-  const ref = useBurstOnMount('var(--cy)');
+  const ref = useBurstOnMount('var(--cy)', 50, 200);
+  const num = useRef(null);
+  useEffect(() => { scramble(num.current, String(m.lvl), 800); }, []);
+  const newTitle = E.TITLES.find(([min]) => min === m.lvl);
   return (
-    <div class="moment" role="dialog" aria-label={`Level ${m.lvl}`} onClick={close}>
-      <div class="moment-ring" />
-      <div class="moment-big" ref={ref}>{m.lvl}</div>
+    <div class="moment level" role="dialog" aria-label={`Level ${m.lvl}`} onClick={close}>
+      <div class="flashbang" />
+      <div class="rays" />
+      <div class="moment-ring" /><div class="moment-ring" /><div class="moment-ring" />
+      <div class="moment-big" ref={(el) => { ref.current = el; num.current = el; }}>{m.lvl}</div>
       <h2>Level {m.lvl}</h2>
-      <p>Health refilled to full.</p>
+      {newTitle ? <div class="title-new">New title unlocked<b>{newTitle[1]}</b></div> : <p>Health refilled to full.</p>}
       <button class="btn" onClick={close}>Keep going</button>
     </div>
   );

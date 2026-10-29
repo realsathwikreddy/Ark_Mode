@@ -1,7 +1,9 @@
 import { useEffect } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import { parseKey, keyOf } from './engine.js';
 
 const paths = {
+  home: <><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" /></>,
   tasks: <><path d="M4 6h2M4 12h2M4 18h2" /><path d="M9 6h11M9 12h11M9 18h11" /></>,
   study: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></>,
   tests: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
@@ -30,7 +32,7 @@ export function Sheet({ title, onClose, children, actions }) {
     window.__sheetClose = onClose; // Android back button closes the top sheet
     return () => { window.removeEventListener('keydown', onKey); if (window.__sheetClose === onClose) window.__sheetClose = null; };
   }, [onClose]);
-  return (
+  return createPortal(
     <div class="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div class="sheet" role="dialog" aria-label={title}>
         <div class="sheet-grip" />
@@ -41,8 +43,14 @@ export function Sheet({ title, onClose, children, actions }) {
         {children}
         {actions && <div class="sheet-actions">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
+}
+
+// The floating + button lives outside the animated screen so it always sits at the bottom right.
+export function Fab({ label, onClick }) {
+  return createPortal(<button class="fab" aria-label={label} onClick={onClick}><Icon name="plus" /></button>, document.body);
 }
 
 export function Switch({ checked, onChange, label }) {

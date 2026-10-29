@@ -4,13 +4,27 @@ import { SUBJECTS, STAGES } from './seed.js';
 import { Icon, Sheet } from './ui.jsx';
 import { scheduleFocusEnd, haptic } from './native.js';
 import { sfx } from './sfx.js';
+import { Planner } from './Planner.jsx';
 
-export function StudyScreen({ state }) {
+const SUBTABS = [{ key: 'plan', name: 'Plan' }, { key: 'focus', name: 'Focus' }, { key: 'backlog', name: 'Backlog' }];
+
+export function StudyScreen({ state, sub = 'plan', setSub }) {
+  const startFromBlock = (b, minutes) => {
+    S.startFocus(minutes, b.title, b.subj || 'm');
+    scheduleFocusEnd({ start: Date.now(), minutes, kind: 'focus' });
+    sfx.tick(); haptic('light');
+    setSub('focus');
+  };
   return (
     <>
-      <div class="section-head"><h1>Study</h1></div>
-      <Focus state={state} />
-      <Backlog state={state} />
+      <div class="seg" role="tablist">
+        {SUBTABS.map((t) => <button key={t.key} class={sub === t.key ? 'on' : ''} role="tab" aria-selected={sub === t.key} onClick={() => { sfx.whoosh(); setSub(t.key); }}>{t.name}</button>)}
+      </div>
+      <div class="sub-pane" key={sub}>
+        {sub === 'plan' && <Planner state={state} onFocus={startFromBlock} />}
+        {sub === 'focus' && <Focus state={state} />}
+        {sub === 'backlog' && <Backlog state={state} />}
+      </div>
     </>
   );
 }

@@ -31,6 +31,8 @@ public class WidgetBridgePlugin extends Plugin {
         e.putInt("bossHp", call.getInt("bossHp", 0));
         e.putInt("bossMax", call.getInt("bossMax", 1));
         e.putString("bossEnd", call.getString("bossEnd", ""));
+        e.putString("nowLine", call.getString("nowLine", ""));
+        e.putString("title", call.getString("title", ""));
         e.apply();
         ArkWidgetProvider.refreshAll(ctx);
         call.resolve();

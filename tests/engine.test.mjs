@@ -81,3 +81,20 @@ console.log('engine: all tests passed');
   assert.ok(frac > 0.18 && frac < 0.22, `solid day = ${frac}`);
 }
 console.log('bosses: all tests passed');
+
+// ---------- update 3 ----------
+{
+  const m = { type: 'daily', frequency: 'monthly', dayOfMonth: 31, startDate: '2026-01-01' };
+  assert.ok(E.isDue(m, '2026-10-31')); assert.ok(E.isDue(m, '2026-11-30')); assert.ok(!E.isDue(m, '2026-11-29'));
+  assert.ok(E.isDue({ ...m, dayOfMonth: 1 }, '2026-11-01'));
+  assert.equal(E.titleFor(1), 'Initiate'); assert.equal(E.titleFor(4), 'Apprentice'); assert.equal(E.titleFor(40), 'Ark Master');
+  assert.deepEqual(E.nextTitle(4), [5, 'Grinder']);
+  assert.equal(E.drinkPotion({ hp: 50, gp: 100 }), null);
+  assert.equal(E.drinkPotion({ hp: 20, gp: 10 }), null);
+  const u = E.drinkPotion({ hp: 40, gp: 30 }); assert.equal(u.hp, 50); assert.equal(u.gp, 5);
+  const v = E.screenVerdict([{ id: 'a', min: 30 }, { id: 'b', min: 45 }], { a: 20, b: 70 });
+  assert.deepEqual(v, { gp: 1, hp: 3, heal: 25, kept: 1, broken: 1, bonusHit: 0 });
+  assert.equal(E.screenVerdict([{ id: 'a', min: 30 }], { a: 10 }).bonusHit, 30);
+  assert.equal(E.screenVerdict([{ id: 'a', min: 30 }], { a: 300 }).hp, 5);
+}
+console.log('update 3: all tests passed');

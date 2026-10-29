@@ -57,5 +57,9 @@ export const sfx = {
   chime() { [784, 988, 1175].forEach((f, i) => tone(f, i * 0.16, 0.5, { vol: 0.09 })); },
   bossDown() { noise(0, 0.5, 0.25, 1400); [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.2 + i * 0.08, 0.3, { type: 'triangle', vol: 0.07 })); },
   death() { [392, 330, 262, 196].forEach((f, i) => tone(f, i * 0.16, 0.3, { type: 'sawtooth', vol: 0.05 })); noise(0.6, 0.4, 0.15, 400); },
+  heal() { [523, 784, 1047].forEach((f, i) => tone(f, i * 0.07, 0.25, { type: 'sine', vol: 0.07 })); noise(0, 0.25, 0.06, 3000); },
+  dust() { noise(0, 0.9, 0.12, 2400); tone(660, 0, 0.5, { vol: 0.03, slide: -300 }); },
+  whoosh() { noise(0, 0.22, 0.07, 1800); },
+  laser() { tone(1800, 0, 0.18, { type: 'sawtooth', vol: 0.025, slide: -1400 }); },
   badge() { tone(1047, 0, 0.12, { type: 'triangle', vol: 0.07 }); tone(1568, 0.1, 0.25, { type: 'triangle', vol: 0.07 }); },
 };

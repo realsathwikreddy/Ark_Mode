@@ -24,10 +24,98 @@ export async function haptic(kind = 'light') {
 }
 export const tap = () => haptic('light');
 
+// ---------- screen time (native Usage Access) ----------
+const ScreenTime = registerPlugin('ScreenTime');
+const mockOn = () => { try { return localStorage.getItem('arkMockUsage') === '1'; } catch { return false; } };
+// In a desktop browser there's no usage data; a test flag fakes some so the screens can be checked.
+function mockUsage(from, to) {
+  const hrs = Math.max(0, (to - from) / 3600000);
+  const f = Math.min(1, hrs / 16);
+  const base = [
+    { pkg: 'com.instagram.android', label: 'Instagram', category: 4, m: 55 },
+    { pkg: 'com.google.android.youtube', label: 'YouTube', category: 2, m: 70 },
+    { pkg: 'com.whatsapp', label: 'WhatsApp', category: 4, m: 25 },
+    { pkg: 'com.spotify.music', label: 'Spotify', category: 1, m: 40 },
+    { pkg: 'com.supercell.clashroyale', label: 'Clash Royale', category: 0, m: 20 },
+  ];
+  return { apps: base.map((a) => ({ ...a, ms: Math.round(a.m * f * 60000) })), pickups: Math.round(60 * f) };
+}
+export async function screenPermission() {
+  if (!isNative) return mockOn();
+  try { return (await ScreenTime.hasPermission()).granted; } catch { return false; }
+}
+export async function openUsageSettings() {
+  if (!isNative) { try { localStorage.setItem('arkMockUsage', '1'); } catch {} return; }
+  try { await ScreenTime.openSettings(); } catch {}
+}
+export async function screenUsage(from, to) {
+  if (!isNative) return mockOn() ? mockUsage(from, to) : { apps: [], pickups: 0 };
+  try { return await ScreenTime.usage({ from, to }); } catch { return { apps: [], pickups: 0 }; }
+}
+export async function listApps() {
+  if (!isNative) return mockUsage(0, 1).apps.map(({ pkg, label, category }) => ({ pkg, label, category }));
+  try { return (await ScreenTime.apps()).apps; } catch { return []; }
+}
+export const CATEGORIES = [
+  { key: 4, name: 'Social' }, { key: 2, name: 'Video' }, { key: 0, name: 'Games' },
+  { key: 1, name: 'Music & audio' }, { key: 5, name: 'News' }, { key: 3, name: 'Photos' },
+];
+
+// ---------- fingerprint unlock ----------
+const BioLock = registerPlugin('BioLock');
+export async function bioAvailable() {
+  if (!isNative) return false;
+  try { return (await BioLock.isAvailable()).available; } catch { return false; }
+}
+export async function bioVerify(reason = 'Unlock Ark Mode') {
+  if (!isNative) return false;
+  try { return (await BioLock.verify({ reason })).verified; } catch { return false; }
+}
+
+// ---------- planner notifications ----------
+const PLAN_BASE = 300;
+let planIds = [];
+export async function schedulePlan(state, blocksFor, blockRange) {
+  if (!isNative) return;
+  try {
+    if (planIds.length) await LocalNotifications.cancel({ notifications: planIds.map((id) => ({ id })) });
+    planIds = [];
+    const ds = state.settings.dayStart ?? 3;
+    const today = E.dayKey(Date.now(), ds);
+    const list = [];
+    for (let i = 0; i < 3; i++) {
+      const day = E.addDays(today, i);
+      blocksFor(state.plan, day, ds).forEach((b) => {
+        const r = blockRange(b, day, ds);
+        if (r.start <= Date.now() || list.length >= 90) return;
+        list.push({ id: PLAN_BASE + list.length, title: `Now: ${b.title}`, body: `Planned until ${new Date(r.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`, schedule: { at: new Date(r.start), allowWhileIdle: true } });
+      });
+    }
+    if (list.length) { await LocalNotifications.schedule({ notifications: list }); planIds = list.map((n) => n.id); }
+  } catch (e) { console.warn('plan notify', e); }
+}
+
+// ---------- files (export) ----------
+export async function shareFile(name, base64, mime) {
+  if (!isNative) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return 'Downloaded.';
+  }
+  const res = await Filesystem.writeFile({ path: name, data: base64, directory: Directory.Cache });
+  await Share.share({ title: name, files: [res.uri], dialogTitle: 'Save or send' });
+  return 'Ready to save or send.';
+}
+
 // ---------- home-screen widget ----------
 const WidgetBridge = registerPlugin('WidgetBridge');
 let lastWidget = '';
-export async function updateWidget(state) {
+export async function updateWidget(state, nowLine = '') {
   if (!isNative) return;
   const u = state.user;
   const ds = state.settings.dayStart ?? 3;
@@ -51,6 +139,8 @@ export async function updateWidget(state) {
     bossHp: b ? b.hp : 0,
     bossMax: b ? b.maxHp : 1,
     bossEnd: b ? b.end : '',
+    nowLine,
+    title: E.titleFor(u.lvl),
   };
   const key = JSON.stringify(payload);
   if (key === lastWidget) return;

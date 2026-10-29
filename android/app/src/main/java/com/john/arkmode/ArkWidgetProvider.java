@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.view.View;
 import android.widget.RemoteViews;
 import java.util.Calendar;
@@ -68,6 +69,18 @@ public class ArkWidgetProvider extends AppWidgetProvider {
             dailies = total == 0 ? "No dailies due today" : left == 0 ? "All dailies done" : left + (left == 1 ? " daily left" : " dailies left");
         }
         v.setTextViewText(R.id.w_dailies, dailies);
+
+        String title = p.getString("title", "");
+        v.setTextViewText(R.id.w_title, title);
+        String nowLine = stale ? "" : p.getString("nowLine", "");
+        v.setViewVisibility(R.id.w_now, nowLine.length() > 0 ? View.VISIBLE : View.GONE);
+        v.setTextViewText(R.id.w_now, nowLine);
+
+        Intent add = new Intent(Intent.ACTION_VIEW, Uri.parse("arkmode://add"));
+        add.setPackage(ctx.getPackageName());
+        add.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent addPi = PendingIntent.getActivity(ctx, 1, add, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        v.setOnClickPendingIntent(R.id.w_add, addPi);
 
         boolean hasBoss = p.getBoolean("hasBoss", false);
         v.setViewVisibility(R.id.w_boss_box, hasBoss ? View.VISIBLE : View.GONE);

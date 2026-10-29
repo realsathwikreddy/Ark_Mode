@@ -65,6 +65,12 @@ export function isDue(task, key) {
     const diff = daysBetween(task.startDate || key, key);
     return diff >= 0 && diff % n === 0;
   }
+  if (task.frequency === 'monthly') {
+    // On day N of each month; in shorter months it falls on the last day.
+    const d = parseKey(key);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return d.getDate() === Math.min(Math.max(1, task.dayOfMonth || 1), last);
+  }
   const dow = parseKey(key).getDay(); // 0 = Sunday
   return !!(task.days || [])[dow];
 }
@@ -307,4 +313,47 @@ export function grantFlat(user0, gp, exp) {
   user.gp += gp; user.exp += exp;
   applyLevels(user);
   return user;
+}
+
+// ---------- titles ----------
+export const TITLES = [
+  [1, 'Initiate'], [3, 'Apprentice'], [5, 'Grinder'], [8, 'Scholar'], [12, 'Strategist'],
+  [16, 'Ranker'], [20, 'Vanguard'], [25, 'Titan'], [30, 'Legend'], [40, 'Ark Master'],
+];
+export function titleFor(lvl) {
+  let t = TITLES[0][1];
+  TITLES.forEach(([min, name]) => { if (lvl >= min) t = name; });
+  return t;
+}
+export function nextTitle(lvl) {
+  return TITLES.find(([min]) => min > lvl) || null;
+}
+
+// ---------- store ----------
+export const POTION = { id: 'potion', name: 'Health Potion', cost: 25, hp: 15 };
+export function drinkPotion(user0) {
+  if (user0.gp < POTION.cost || user0.hp >= MAX_HP) return null;
+  const user = { ...user0, events: [] };
+  user.gp = round1000(user.gp - POTION.cost);
+  user.hp = Math.min(MAX_HP, round1(user.hp + POTION.hp));
+  return user;
+}
+
+// ---------- screen time ----------
+// Kept limits pay a little gold; going over costs health (1 per 10 min, max 5 per limit)
+// and heals the boss 1 per minute over. All limits kept = a bonus boss hit.
+export function screenVerdict(limits, usedMin) {
+  let gp = 0, hp = 0, heal = 0, kept = 0, broken = 0;
+  limits.forEach((l) => {
+    const used = usedMin[l.id] || 0;
+    if (used <= l.min) { kept++; gp += 1; }
+    else {
+      broken++;
+      const over = used - l.min;
+      hp += Math.min(5, Math.ceil(over / 10));
+      heal += over;
+    }
+  });
+  const bonusHit = limits.length && broken === 0 ? 30 : 0;
+  return { gp, hp, heal, kept, broken, bonusHit };
 }

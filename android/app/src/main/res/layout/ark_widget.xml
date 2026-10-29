@@ -13,6 +13,12 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
         <TextView
             android:id="@+id/w_level"
             android:layout_width="wrap_content"
@@ -23,8 +29,15 @@
             android:textStyle="bold"
             android:shadowColor="#994FF0FF"
             android:shadowRadius="12"
-            android:includeFontPadding="false"
-            android:layout_marginEnd="12dp" />
+            android:includeFontPadding="false" />
+        <TextView
+            android:id="@+id/w_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#7D93A8"
+            android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -72,7 +85,32 @@
                 android:progress="0"
                 android:progressDrawable="@drawable/widget_bar_xp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/w_add"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/widget_add_bg"
+            android:contentDescription="Add a to-do"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#070A12"
+            android:textSize="22sp"
+            android:textStyle="bold" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/w_now"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text=""
+        android:textColor="#4FF0FF"
+        android:textSize="13sp"
+        android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
