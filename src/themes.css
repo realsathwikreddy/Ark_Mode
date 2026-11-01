@@ -136,3 +136,19 @@
   --font: 'Space Grotesk', system-ui, sans-serif; --display: 'Space Grotesk', system-ui, sans-serif;
   --g: .35;
 }
+
+/* ---------- Monsoon: rainy city at night, drops on the glass ---------- */
+:root[data-theme='monsoon'] {
+  --bg: #070c1a; --surface: rgba(16, 24, 46, .92); --surface-2: rgba(26, 36, 64, .95); --line: rgba(150, 190, 255, .16);
+  --text: #eaf2ff; --muted: #9db0cf; --faint: #5d6e8f; --on-accent: #06101f;
+  --cy: #8fd8ff; --cy-rgb: 143, 216, 255; --mg: #ff5fa2; --mg-rgb: 255, 95, 162;
+  --hp: #ff5f7e; --hp-rgb: 255, 95, 126;
+  --gold: #ffcf7a; --gold-rgb: 255, 207, 122; --good: #6cf2c2; --good-rgb: 108, 242, 194; --bad: #ff5f7e;
+  --v-worst: #ff3f6c; --v-worse: #ff6a7e; --v-bad: #ffab5c; --v-neutral: #ffe07a; --v-good: #6cf2c2; --v-better: #8fd8ff; --v-best: #9c9cff;
+  --rail: rgba(150, 190, 255, .12); --task-bg: rgba(14, 22, 44, .62); --task-line: rgba(150, 190, 255, .16); --card-bg: rgba(14, 22, 44, .62);
+  --nav-bg: rgba(7, 12, 26, .86); --scrim: rgba(3, 6, 14, .6); --moment-bg: rgba(6, 10, 22, .9); --wash: rgba(255, 255, 255, .05);
+  --body-bg: #070c1a;
+  --font: 'Space Grotesk', system-ui, sans-serif; --display: 'Space Grotesk', system-ui, sans-serif;
+  --g: .7;
+  color-scheme: dark;
+}

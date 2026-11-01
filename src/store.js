@@ -8,9 +8,12 @@ import { sfx, setSoundEnabled } from './sfx.js';
 import { haptic, setHapticsEnabled, screenUsage, screenPermission, isNative } from './native.js';
 import { FRAMES } from './frames.jsx';
 import { blockRange } from './planner.js';
+import { fetchJson } from './updates.js';
+import { feedConfigure, feedSchedule, feedTakePending } from './native.js';
+import { ask, parseJson } from './claude.js';
 
 const KEY = 'arkmode-state-v1';
-const UI_KEYS = ['toasts', 'queue', 'bossFx', 'checkin', 'undo', 'locked', 'screenToday', 'quickAdd', 'fx'];
+const UI_KEYS = ['toasts', 'queue', 'bossFx', 'checkin', 'undo', 'locked', 'screenToday', 'quickAdd', 'fx', 'update'];
 let state = null;
 const listeners = new Set();
 let saveTimer = null;
@@ -26,7 +29,11 @@ const DEFAULT_SETTINGS = {
   sound: true, haptics: true, targets: emptyTargets(), theme: 'neon',
   lock: { enabled: false, pinHash: null, bio: false },
   screen: { enabled: false, limits: [] },
+  radar: { cats: ['hackathon', 'ai', 'music', 'internship', 'jee'], places: ['online', 'hyderabad', 'india', 'international'], notify: true },
+  claude: { key: '', model: 'claude-sonnet-5-5' },
+  lens: true,
 };
+const emptyRadar = () => ({ items: [], saved: [], dismissed: [], read: [], updated: null, smart: false, verdicts: {} });
 
 function initialState() {
   const t = E.dayKey(now(), 3);
@@ -47,6 +54,7 @@ function initialState() {
     plan: [],
     planDone: {},
     store: { owned: [], frame: null },
+    radar: emptyRadar(),
     lastCron: t,
     checkin: null,
     toasts: [],
@@ -66,7 +74,10 @@ function migrate(saved) {
       targets: { ...emptyTargets(), ...(saved.settings?.targets || {}) },
       lock: { ...DEFAULT_SETTINGS.lock, ...(saved.settings?.lock || {}) },
       screen: { ...DEFAULT_SETTINGS.screen, ...(saved.settings?.screen || {}) },
+      radar: { ...DEFAULT_SETTINGS.radar, ...(saved.settings?.radar || {}) },
+      claude: { ...DEFAULT_SETTINGS.claude, ...(saved.settings?.claude || {}) },
     },
+    radar: { ...emptyRadar(), ...(saved.radar || {}) },
     plan: saved.plan || [],
     planDone: saved.planDone || {},
     store: { owned: [], frame: null, ...(saved.store || {}) },
@@ -729,4 +740,128 @@ async function collectScreenDays(fromDay, toDay) {
       return { ...s, history };
     });
   }
+}
+
+// ---------- radar (opportunities feed) ----------
+export function radarItems(s) {
+  const rs = s.settings.radar;
+  const v = s.radar.verdicts || {};
+  return s.radar.items
+    .filter((i) => rs.cats.includes(i.cat) && rs.places.includes(i.place))
+    .filter((i) => !(s.radar.smart && v[i.id] && v[i.id].score < 5))
+    .map((i) => (v[i.id]?.summary ? { ...i, summary: v[i.id].summary } : i));
+}
+export function syncFeedPrefs() {
+  const s = state;
+  feedConfigure({ enabled: s.settings.radar.notify, cats: s.settings.radar.cats.join(','), places: s.settings.radar.places.join(','), seen: s.radar.items.map((i) => i.id).slice(-800).join(',') });
+}
+export function setRadar(patch) {
+  setState((s) => ({ ...s, settings: { ...s.settings, radar: { ...s.settings.radar, ...patch } } }));
+  syncFeedPrefs();
+}
+export function setRadarSmart(v) {
+  setState((s) => ({ ...s, radar: { ...s.radar, smart: v } }));
+  if (v) smartFilter().catch((e) => toast(e.message, 'bad'));
+}
+export function toggleSaved(id) {
+  setState((s) => ({ ...s, radar: { ...s.radar, saved: s.radar.saved.includes(id) ? s.radar.saved.filter((x) => x !== id) : [...s.radar.saved, id] } }));
+  sfx.tick();
+}
+export function dismissOpp(id) {
+  const snap = snapshot();
+  setState((s) => ({ ...s, radar: { ...s.radar, dismissed: [...s.radar.dismissed, id].slice(-600) } }));
+  offerUndo('Hidden from Radar', snap);
+}
+export function markRadarRead() {
+  setState((s) => ({ ...s, radar: { ...s.radar, read: s.radar.items.map((i) => i.id).slice(-800) } }));
+}
+export function radarUnread(s) {
+  return radarItems(s).filter((i) => !s.radar.read.includes(i.id) && !s.radar.dismissed.includes(i.id)).length;
+}
+let radarBusy = false;
+export async function refreshRadar({ manual = false } = {}) {
+  if (radarBusy) return 0;
+  const last = state.radar.fetchedAt || 0;
+  if (!manual && Date.now() - last < 20 * 60000) return 0;
+  radarBusy = true;
+  try {
+    const feed = await fetchJson('feed.json');
+    const known = new Set(state.radar.items.map((i) => i.id));
+    const keepSaved = state.radar.items.filter((i) => state.radar.saved.includes(i.id) && !feed.items.some((f) => f.id === i.id));
+    const fresh = feed.items.filter((i) => !known.has(i.id));
+    setState((s) => ({ ...s, radar: { ...s.radar, items: [...feed.items, ...keepSaved], updated: feed.updated, fetchedAt: Date.now() } }));
+    syncFeedPrefs();
+    if (state.radar.smart && state.settings.claude?.key) smartFilter().catch(() => {});
+    const rs = state.settings.radar;
+    return fresh.filter((i) => rs.cats.includes(i.cat) && rs.places.includes(i.place)).length;
+  } finally {
+    radarBusy = false;
+  }
+}
+// Claude reads listings it hasn't judged yet and scores them for Sathwik.
+let smartBusy = false;
+export async function smartFilter() {
+  if (smartBusy || !state.settings.claude?.key) return;
+  smartBusy = true;
+  try {
+    const todo = radarItemsRaw().filter((i) => !state.radar.verdicts?.[i.id]).slice(0, 25);
+    if (!todo.length) return;
+    const list = todo.map((i, n) => `${n + 1}. [${i.cat}, ${i.place}${i.funded ? ', travel paid' : ''}] ${i.title} | ${i.source}${i.org ? ' / ' + i.org : ''} | ${i.when || ''} | ${i.detail || ''}`).join('\n');
+    const text = await ask(state.settings, {
+      system: 'You filter opportunities for Sathwik, a class 12 JEE aspirant in Hyderabad, India, who also loves music and AI. He wants hackathons, AI classes, music opportunities, internships open to school students, and JEE/college admission news. Events must be online, in Hyderabad, elsewhere in India, or abroad only if travel is paid. Score each item 0-10 for how worth his time it is (eligibility for a 17-year-old school student matters a lot). Reply with only JSON: [{"n":1,"score":7,"summary":"one short plain line"}].',
+      prompt: list,
+      maxTokens: 1800,
+    });
+    const arr = parseJson(text);
+    const verdicts = { ...(state.radar.verdicts || {}) };
+    arr.forEach((v) => { const it = todo[v.n - 1]; if (it) verdicts[it.id] = { score: Number(v.score) || 0, summary: String(v.summary || '').slice(0, 160) }; });
+    setState((s) => ({ ...s, radar: { ...s.radar, verdicts } }));
+  } finally {
+    smartBusy = false;
+  }
+}
+function radarItemsRaw() {
+  const rs = state.settings.radar;
+  return state.radar.items.filter((i) => rs.cats.includes(i.cat) && rs.places.includes(i.place) && !state.radar.dismissed.includes(i.id));
+}
+export async function startFeedWorker() {
+  syncFeedPrefs();
+  await feedSchedule();
+  const n = await feedTakePending();
+  return n;
+}
+
+// ---------- Claude settings & planner ----------
+export function setClaude(patch) {
+  setState((s) => ({ ...s, settings: { ...s.settings, claude: { ...s.settings.claude, ...patch } } }));
+}
+export async function planWithClaude(day, { from, to, focus }) {
+  const s = state;
+  const dayName = E.parseKey(day).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+  const backlog = s.backlog.filter((b) => !Object.values(b.stages).every(Boolean)).map((b) => `${b.chapter} (${['m', 'p', 'c'].indexOf(b.subj) >= 0 ? { m: 'Maths', p: 'Physics', c: 'Chemistry' }[b.subj] : ''}; done: ${Object.entries(b.stages).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nothing'})`).join('; ');
+  const pt = s.pts.find((p) => p.papers.some((x) => x.date >= day));
+  const ptLine = pt ? `Next part test PT-${pt.n} on ${pt.papers[0].date}. Syllabus: Maths ${pt.syllabus.m.join(', ')}; Physics ${pt.syllabus.p.join(', ')}; Chemistry ${pt.syllabus.c.join(', ')}.` : '';
+  const weak = {};
+  s.pts.forEach((p) => p.papers.forEach((x) => x.mistakes.forEach((m) => { weak[m.chapter] = (weak[m.chapter] || 0) + (Number(m.marks) || 0); })));
+  const weakLine = Object.entries(weak).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, m]) => `${c} (-${m})`).join(', ');
+  const existing = s.plan.filter((b) => (b.repeat === 'once' ? b.date === day : b.days?.[E.parseKey(day).getDay()])).map((b) => `${b.start}-${b.end} ${b.title}`).join('; ');
+  const text = await ask(s.settings, {
+    system: 'You plan study time blocks for Sathwik, a JEE aspirant at Narayana in Hyderabad. Make realistic blocks with short breaks, mixing subjects, prioritising the upcoming part-test syllabus, his backlog and his weakest chapters. Use 24-hour HH:MM times. Reply with only JSON: [{"start":"18:00","end":"19:00","title":"short specific task","subj":"m"|"p"|"c"|null}].',
+    prompt: `Plan ${dayName}, free from ${from} to ${to}.${focus ? ` He wants to focus on: ${focus}.` : ''}\n${ptLine}\nBacklog: ${backlog || 'none'}.\nWeakest chapters from mistake log: ${weakLine || 'no data yet'}.\nAlready planned that day (do not overlap): ${existing || 'nothing'}.`,
+    maxTokens: 1200,
+  });
+  const arr = parseJson(text);
+  return arr
+    .filter((b) => /^\d{1,2}:\d{2}$/.test(b.start) && /^\d{1,2}:\d{2}$/.test(b.end) && b.title)
+    .map((b) => ({ id: uid(), title: String(b.title).slice(0, 80), subj: ['m', 'p', 'c'].includes(b.subj) ? b.subj : null, start: b.start.padStart(5, '0'), end: b.end.padStart(5, '0'), repeat: 'once', date: day, days: [0, 1, 2, 3, 4, 5, 6].map(() => false), ai: true }));
+}
+export function addBlocks(blocks) {
+  const snap = snapshot();
+  setState((s) => ({ ...s, plan: [...s.plan, ...blocks] }));
+  offerUndo(`${blocks.length} blocks added`, snap);
+}
+
+// ---------- app updates ----------
+export function setUpdate(u) {
+  setState((s) => ({ ...s, update: u }), { save: false });
 }

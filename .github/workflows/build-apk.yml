@@ -38,6 +38,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
           cp app/build/outputs/apk/release/app-release.apk ../ArkMode.apk
+          cd .. && (cd dist && zip -qr ../web-bundle.zip .)
 
       - name: Report failure as a commit comment
         if: failure()
@@ -53,5 +54,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Ark Mode build ${{ github.run_number }}
           body: Install ArkMode.apk on your phone. Updates install over the old version and keep your data.
-          files: ArkMode.apk
+          files: |
+            ArkMode.apk
+            web-bundle.zip
           make_latest: true

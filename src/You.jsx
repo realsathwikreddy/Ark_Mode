@@ -11,6 +11,8 @@ import { ScreenTimeSection } from './ScreenTime.jsx';
 import { LockSetup } from './Lock.jsx';
 import { buildWorkbook } from './exportxlsx.js';
 import { shareFile } from './native.js';
+import { MODELS, testKey } from './claude.js';
+import { WEB_VERSION, NATIVE_VERSION, checkForUpdate, applyNow, openLink } from './updates.js';
 
 export function YouScreen({ state }) {
   const today = S.today();
@@ -36,7 +38,9 @@ export function YouScreen({ state }) {
       <Trophies state={state} />
       <Appearance state={state} />
       <Settings state={state} />
+      <ClaudeSettings state={state} />
       <Backup state={state} />
+      <About state={state} />
     </>
   );
 }
@@ -165,6 +169,7 @@ function Appearance({ state }) {
               <i style={`background:${t.a};box-shadow:0 0 ${t.dark ? 10 : 0}px ${t.a}`} />
               <i style={`background:${t.b};box-shadow:0 0 ${t.dark ? 10 : 0}px ${t.b}`} />
               <b style={`border-color:${t.a}`} />
+              {t.rain && <><em class="sw-drop" style="left:30%;top:34%" /><em class="sw-drop" style="left:62%;top:52%;width:9px;height:11px" /></>}
             </span>
             <span class="theme-n">{t.name}</span>
           </button>
@@ -186,6 +191,12 @@ function Settings({ state }) {
           <div class="grow"><div>Rest mode</div><div class="small muted">Pauses dailies. No damage, streaks kept. For holidays or exam days.</div></div>
           <Switch checked={st.restMode} onChange={(v) => set('restMode', v)} label="Rest mode" />
         </div>
+        {state.settings.theme === 'monsoon' && (
+          <div class="setting">
+            <div class="grow"><div>Droplet lens</div><div class="small muted">Raindrops on the glass that bend what's under them. Turn off if scrolling feels slow.</div></div>
+            <Switch checked={state.settings.lens !== false} onChange={(v) => set('lens', v)} label="Droplet lens" />
+          </div>
+        )}
         <div class="setting">
           <div class="grow">Your name</div>
           <input class="input" style="width:150px" value={st.name} onInput={(e) => set('name', e.target.value)} aria-label="Your name" />
@@ -234,6 +245,65 @@ function Settings({ state }) {
         </div>
       </div>
       {lockOpen && <LockSetup state={state} onClose={() => setLockOpen(false)} />}
+    </div>
+  );
+}
+
+function ClaudeSettings({ state }) {
+  const c = state.settings.claude;
+  const [key, setKey] = useState(c.key);
+  const [show, setShow] = useState(false);
+  const [msg, setMsg] = useState('');
+  const save = async () => {
+    S.setClaude({ key: key.trim() });
+    if (!key.trim()) { setMsg('Key removed.'); return; }
+    setMsg('Checking…');
+    try { await testKey({ ...state.settings, claude: { ...c, key: key.trim() } }); setMsg('Key works.'); }
+    catch (e) { setMsg(e.message); }
+  };
+  return (
+    <div class="section">
+      <div class="section-head"><h2>Claude</h2><span class="small muted">{c.key ? 'Connected' : 'Not set'}</span></div>
+      <div class="card">
+        <p class="small muted" style="margin:0 0 12px">Your own Claude API key powers "Plan with Claude" and the Radar smart filter. It stays on this phone and is only sent to Anthropic. API use is billed to your Anthropic account.</p>
+        <label class="field">API key
+          <div class="row">
+            <input class="input grow" type={show ? 'text' : 'password'} value={key} onInput={(e) => setKey(e.target.value)} placeholder="sk-ant-…" autoComplete="off" />
+            <button class="btn ghost small" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button>
+          </div>
+        </label>
+        <div class="field"><span>Model</span>
+          <div class="chips">{MODELS.map((m) => <button key={m.id} class={`chip ${c.model === m.id ? 'on' : ''}`} onClick={() => S.setClaude({ model: m.id })}>{m.name}</button>)}</div>
+        </div>
+        <div class="row"><button class="btn small" onClick={save}>Save key</button>{msg && <span class="small">{msg}</span>}</div>
+      </div>
+    </div>
+  );
+}
+
+function About({ state }) {
+  const [msg, setMsg] = useState('');
+  const check = async () => {
+    setMsg('Checking…');
+    try {
+      const u = await checkForUpdate();
+      if (u.kind === 'web-ready') { S.setUpdate(u); setMsg(`Version ${u.web} downloaded.`); }
+      else if (u.kind === 'apk') { S.setUpdate(u); setMsg('A new version needs one install.'); }
+      else setMsg('You\u2019re on the latest version.');
+    } catch (e) { setMsg(navigator.onLine === false ? 'You\u2019re offline.' : `Couldn\u2019t check: ${e.message}`); }
+  };
+  return (
+    <div class="section">
+      <div class="section-head"><h2>App</h2><span class="small muted">Version {WEB_VERSION} (native {NATIVE_VERSION})</span></div>
+      <div class="card">
+        <p class="small muted" style="margin:0 0 12px">Updates download by themselves when you're online and apply the next time you open Ark Mode. Bigger ones ask for a single tap to install.</p>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn ghost small" onClick={check}>Check for updates</button>
+          {state.update?.kind === 'web-ready' && <button class="btn small" onClick={() => applyNow(state.update.id)}>Restart to update</button>}
+          {state.update?.kind === 'apk' && <button class="btn small" onClick={() => openLink(state.update.url)}>Download update</button>}
+        </div>
+        {msg && <p class="small" style="margin:10px 0 0">{msg}</p>}
+      </div>
     </div>
   );
 }

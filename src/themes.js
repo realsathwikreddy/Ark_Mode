@@ -8,6 +8,7 @@ export const THEMES = [
   { id: 'paper', name: 'Graph Paper', bg: '#fbfcfe', a: '#1f45b5', b: '#d23c3c', dark: false },
   { id: 'mono', name: 'Mono Bold', bg: '#f4f4f2', a: '#0a0a0a', b: '#ff2d2d', dark: false },
   { id: 'arctic', name: 'Arctic', bg: '#f2f7fb', a: '#1769d1', b: '#7a3ddb', dark: false },
+  { id: 'monsoon', name: 'Monsoon', bg: '#070c1a', a: '#8fd8ff', b: '#ff5fa2', dark: true, rain: true },
 ];
 
 export function applyTheme(id) {

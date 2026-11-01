@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(ScreenTimePlugin.class);
         registerPlugin(BioLockPlugin.class);
+        registerPlugin(FeedBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

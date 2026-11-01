@@ -112,6 +112,12 @@ export async function shareFile(name, base64, mime) {
   return 'Ready to save or send.';
 }
 
+// ---------- background feed + update checker ----------
+const FeedBridge = registerPlugin('FeedBridge');
+export async function feedConfigure(opts) { if (!isNative) return; try { await FeedBridge.configure(opts); } catch {} }
+export async function feedSchedule() { if (!isNative) return; try { await FeedBridge.schedule(); } catch {} }
+export async function feedTakePending() { if (!isNative) return 0; try { return (await FeedBridge.takePending()).pending || 0; } catch { return 0; } }
+
 // ---------- home-screen widget ----------
 const WidgetBridge = registerPlugin('WidgetBridge');
 let lastWidget = '';

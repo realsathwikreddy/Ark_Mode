@@ -6,6 +6,7 @@ import { BossCard } from './Moments.jsx';
 import { fmtDate, relDay } from './ui.jsx';
 import { paperTotal } from './Tests.jsx';
 import { SUBJECTS } from './seed.js';
+import { openLink } from './updates.js';
 
 const greet = (h) => (h < 5 ? 'Late night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night');
 
@@ -108,6 +109,8 @@ export function HomeScreen({ state, go }) {
         </button>
       )}
 
+      <RadarCard state={state} go={go} />
+
       <div class="quick">
         <button class="qa" onClick={() => { go('tasks', 'todo'); S.requestQuickAdd(); }}><span>+</span>To-do</button>
         <button class="qa" onClick={() => go('study', 'focus')}><span>◷</span>Focus</button>
@@ -115,5 +118,27 @@ export function HomeScreen({ state, go }) {
         <button class="qa" onClick={() => go('store')}><span>◆</span>Store</button>
       </div>
     </div>
+  );
+}
+
+function RadarCard({ state, go }) {
+  const items = S.radarItems(state).filter((i) => !state.radar.dismissed.includes(i.id));
+  const unread = S.radarUnread(state);
+  const top = items.slice(0, 3);
+  return (
+    <section class="card radar-card">
+      <div class="spread" style="margin-bottom:8px">
+        <h3><span class="radar-dot" />Radar</h3>
+        <button class="link" onClick={() => go('radar')}>{unread ? `${unread} new` : 'See all'}</button>
+      </div>
+      {top.length === 0 ? (
+        <p class="small muted" style="margin:0">Hackathons, AI classes, music, internships and JEE news show up here once the feed loads.</p>
+      ) : top.map((i) => (
+        <button key={i.id} class="radar-row" onClick={() => openLink(i.url)}>
+          <span class={`opp-cat cat-${i.cat}`}>{({ hackathon: 'Hack', ai: 'AI', music: 'Music', internship: 'Intern', jee: 'JEE' })[i.cat]}</span>
+          <span class="grow">{i.title}</span>
+        </button>
+      ))}
+    </section>
   );
 }

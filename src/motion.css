@@ -219,3 +219,66 @@
 }
 
 :root[data-theme='paper'] .dash-big, :root[data-theme='paper'] .stat-v, :root[data-theme='paper'] .dash-v { font-family: var(--font); }
+
+/* ---------- stage (everything that scrolls with the content) ---------- */
+.stage { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.stage.lensed { filter: url(#ark-lens); }
+
+/* ---------- monsoon layers ---------- */
+.rain-city, .rain-fall { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+.rain-city { z-index: 0; }
+.rain-fall { z-index: 0; mix-blend-mode: screen; }
+.lens-defs { position: absolute; width: 0; height: 0; }
+.glass-drops { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.gdrop {
+  position: absolute; display: block;
+  background:
+    radial-gradient(ellipse 22% 16% at 34% 28%, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 10% 7% at 62% 22%, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 80%),
+    radial-gradient(ellipse 60% 40% at 50% 82%, rgba(180, 220, 255, .22), rgba(180, 220, 255, 0) 70%),
+    radial-gradient(circle at 50% 45%, rgba(160, 200, 255, .05), rgba(10, 20, 40, .18) 75%, rgba(0, 0, 0, .35) 100%);
+  box-shadow:
+    inset 0 -3px 6px rgba(255, 255, 255, .22),
+    inset 0 3px 7px rgba(0, 0, 0, .45),
+    inset 2px 0 4px rgba(255, 255, 255, .08),
+    4px 7px 10px -2px rgba(0, 0, 0, .55),
+    0 0 0 .6px rgba(200, 225, 255, .25);
+  animation: drop-land .5s cubic-bezier(.3, 1.6, .5, 1) backwards;
+  transition: top .05s linear;
+}
+@keyframes drop-land { from { transform: scale(.3); opacity: 0; } }
+:root[data-theme='monsoon'] .hero, :root[data-theme='monsoon'] .main { background: transparent; }
+:root[data-theme='monsoon'] .card, :root[data-theme='monsoon'] .task, :root[data-theme='monsoon'] .stat,
+:root[data-theme='monsoon'] .dash, :root[data-theme='monsoon'] .now-card, :root[data-theme='monsoon'] .pt { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+:root[data-theme='monsoon'] .level-num { text-shadow: 0 0 18px rgba(143, 216, 255, .6), 0 2px 0 rgba(0, 0, 0, .4); }
+
+/* ---------- update bar ---------- */
+.update-bar { display: flex; align-items: center; gap: 10px; margin: 0 16px 8px; padding: 10px 12px; border: 1px solid rgba(var(--cy-rgb), .5); border-radius: var(--r-md); background: var(--card-bg); font-size: 14px; animation: rise-in .5s cubic-bezier(.16, 1, .3, 1); }
+.spark { color: var(--cy); text-shadow: 0 0 calc(10px * var(--g)) var(--cy); }
+
+/* ---------- radar ---------- */
+.radar-card h3 { display: flex; align-items: center; gap: 8px; }
+.radar-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--cy); position: relative; }
+.radar-dot::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid var(--cy); animation: ping 2s ease-out infinite; }
+@keyframes ping { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+.radar-row { display: flex; gap: 10px; align-items: center; width: 100%; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--text); text-align: left; font-size: 14px; }
+.radar-row .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.radar-list { display: grid; gap: 10px; }
+.opp { padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card-bg); }
+.opp.fresh { border-color: rgba(var(--cy-rgb), .45); }
+.opp-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.opp-cat { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--wash); color: var(--cy); white-space: nowrap; flex: none; }
+.cat-hackathon { color: var(--cy); } .cat-ai { color: var(--good); } .cat-music { color: var(--mg); } .cat-internship { color: var(--gold); } .cat-jee { color: var(--hp); }
+.opp-title { display: block; background: none; border: 0; padding: 0; color: var(--text); font: inherit; font-size: 16px; font-weight: 600; text-align: left; line-height: 1.3; margin-bottom: 6px; }
+.opp-sum { margin: 0 0 6px; font-size: 13.5px; color: var(--muted); }
+.opp-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+
+/* ---------- claude ---------- */
+.claude-plan { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 12px; padding: 12px; border-radius: var(--r-md); border: 1px dashed rgba(var(--cy-rgb), .55); background: rgba(var(--cy-rgb), .06); color: var(--cy); font-size: 14.5px; font-weight: 600; }
+.claude-plan.off { color: var(--muted); border-color: var(--line); background: none; }
+.thinking { display: flex; gap: 6px; justify-content: center; margin: 16px 0 4px; }
+.thinking i { width: 8px; height: 8px; border-radius: 50%; background: var(--cy); animation: think 1s ease-in-out infinite; }
+.thinking i:nth-child(2) { animation-delay: .15s; } .thinking i:nth-child(3) { animation-delay: .3s; }
+@keyframes think { 50% { transform: translateY(-6px); opacity: .4; } }
+.sw-drop { position: absolute; width: 13px; height: 16px; border-radius: 50%; background: radial-gradient(ellipse 30% 20% at 35% 30%, rgba(255, 255, 255, .9), transparent 70%), rgba(160, 200, 255, .12); box-shadow: inset 0 -2px 3px rgba(255, 255, 255, .25), 2px 3px 4px rgba(0, 0, 0, .5); }
+.theme-card[aria-label^='Monsoon'] .theme-sw { background: linear-gradient(180deg, #0a1226, #1a1430) !important; }

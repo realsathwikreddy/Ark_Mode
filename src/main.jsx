@@ -22,6 +22,9 @@ import { burst, centerOf } from './fx.js';
 import { blocksFor, blockRange, nowAndNext, fmtTime } from './planner.js';
 import { scheduleReminders, askNotificationPermission, isNative, updateWidget, schedulePlan } from './native.js';
 import { sfx } from './sfx.js';
+import { RadarScreen } from './Radar.jsx';
+import { appReady, checkForUpdate, applyNow, openLink } from './updates.js';
+import { Rain } from './rain.jsx';
 
 const SCREENS = [
   { key: 'home', name: 'Home', icon: 'home' },
@@ -94,6 +97,19 @@ function UndoBar({ undo }) {
   );
 }
 
+function UpdateBar({ u }) {
+  return (
+    <div class="update-bar">
+      <span class="spark">✦</span>
+      <span class="grow">{u.kind === 'apk' ? 'New version: tap to download and install' : `Update ${u.web} ready`}</span>
+      {u.kind === 'apk'
+        ? <button class="btn small" onClick={() => openLink(u.url)}>Install</button>
+        : <button class="btn small" onClick={() => applyNow(u.id)}>Restart</button>}
+      <button class="link" aria-label="Later" onClick={() => S.setUpdate(null)}>Later</button>
+    </div>
+  );
+}
+
 function App() {
   const state = S.useStore();
   const [screen, setScreenRaw] = useState('home');
@@ -129,11 +145,36 @@ function App() {
     };
     document.addEventListener('visibilitychange', onVis);
     const subs = [];
-    const openUrl = (url) => { if (url && url.includes('add')) { go('tasks', 'todo'); S.requestQuickAdd(); } };
+    const openUrl = (url) => {
+      if (!url) return;
+      if (url.includes('add')) { go('tasks', 'todo'); S.requestQuickAdd(); }
+      else if (url.includes('radar')) go('radar');
+      else if (url.includes('update')) go('you');
+    };
+    // Updates and the opportunities feed, whenever we're online.
+    const online = async () => {
+      try {
+        const u = await checkForUpdate();
+        if (u.kind === 'web-ready' || u.kind === 'apk') S.setUpdate(u);
+      } catch {}
+      try { await S.refreshRadar(); } catch {}
+    };
+    appReady();
+    setTimeout(online, 2500);
+    S.startFeedWorker().then((n) => { if (n > 0) S.toast(`${n} new on Radar`, 'info'); });
+    window.addEventListener('online', online);
     if (isNative) {
       CapApp.addListener('appStateChange', ({ isActive }) => {
-        if (isActive) { if (awayAt.current && Date.now() - awayAt.current > 30000) S.lockNow(); S.checkDay(); }
-        else { awayAt.current = Date.now(); S.flush(); }
+        if (isActive) {
+          if (awayAt.current && Date.now() - awayAt.current > 30000) S.lockNow();
+          S.checkDay();
+          if (Date.now() - awayAt.current > 10 * 60000) online();
+          S.startFeedWorker().then((n) => { if (n > 0) S.toast(`${n} new on Radar`, 'info'); });
+        }
+        else {
+          awayAt.current = Date.now(); S.flush();
+          // A downloaded update applies quietly when you leave the app.
+        }
       }).then((h) => subs.push(h));
       CapApp.addListener('appUrlOpen', ({ url }) => openUrl(url)).then((h) => subs.push(h));
       CapApp.getLaunchUrl().then((r) => openUrl(r?.url)).catch(() => {});
@@ -146,7 +187,7 @@ function App() {
       }).then((h) => subs.push(h));
       if (state.settings.reminders) askNotificationPermission();
     }
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); subs.forEach((h) => h.remove()); };
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('online', online); subs.forEach((h) => h.remove()); };
   }, []);
 
   // Widget: keep it in step, including what's planned right now.
@@ -174,10 +215,14 @@ function App() {
   }, [state.fx?.at]);
 
   if (state.locked) return <LockScreen state={state} />;
+  const monsoon = state.settings.theme === 'monsoon';
 
   return (
     <>
+      {monsoon && <Rain lens={state.settings.lens !== false} screen={screen} />}
+      <div class={`stage ${monsoon && state.settings.lens !== false ? 'lensed' : ''}`}>
       <Hero state={state} />
+      {state.update && <UpdateBar u={state.update} />}
       <main class={`main enter ${dir > 0 ? 'from-right' : 'from-left'}`} key={screen}>
         {screen === 'home' && <HomeScreen state={state} go={go} />}
         {screen === 'tasks' && <TasksScreen state={state} tab={taskTab} setTab={setTaskTab} />}
@@ -185,9 +230,11 @@ function App() {
         {screen === 'tests' && <TestsScreen state={state} />}
         {screen === 'store' && <ShopScreen state={state} />}
         {screen === 'you' && <YouScreen state={state} />}
+        {screen === 'radar' && <RadarScreen state={state} />}
       </main>
+      </div>
       <nav class="nav" style={`--i:${idx};--n:${SCREENS.length}`}>
-        <span class="nav-ind" key={idx} />
+        {idx >= 0 && <span class="nav-ind" key={idx} />}
         {SCREENS.map((s) => (
           <button key={s.key} class={screen === s.key ? 'on' : ''} aria-current={screen === s.key ? 'page' : undefined} onClick={() => setScreen(s.key)}>
             <Icon name={s.icon} />{s.name}

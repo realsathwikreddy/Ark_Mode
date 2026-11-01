@@ -14,6 +14,7 @@ export function Planner({ state, onFocus }) {
   const today = S.today();
   const [day, setDay] = useState(today);
   const [editing, setEditing] = useState(null);
+  const [ai, setAi] = useState(false);
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t); }, []);
   const list = blocksFor(state.plan, day, ds);
@@ -74,7 +75,11 @@ export function Planner({ state, onFocus }) {
           })}
         </div>
       )}
+      <button class={`claude-plan ${state.settings.claude?.key ? '' : 'off'}`} onClick={() => setAi(true)}>
+        <span class="spark">✦</span>{state.settings.claude?.key ? `Plan ${day === today ? 'today' : fmtDate(day, true)} with Claude` : 'Plan with Claude (add your API key in Settings)'}
+      </button>
       <Fab label="Add block" onClick={() => setEditing(blank(day))} />
+      {ai && <AiPlan state={state} day={day} onClose={() => setAi(false)} />}
       {editing && <BlockEditor block={editing} onClose={() => setEditing(null)} />}
     </div>
   );
@@ -123,6 +128,61 @@ function BlockEditor({ block, onClose }) {
         </div>
       )}
       <p class="small muted" style="margin:0 0 8px">You'll get a notification when the block starts, and it shows as "Now" on the home screen and widget.</p>
+    </Sheet>
+  );
+}
+
+function AiPlan({ state, day, onClose }) {
+  const hasKey = !!state.settings.claude?.key;
+  const [from, setFrom] = useState('18:00');
+  const [to, setTo] = useState('22:30');
+  const [focus, setFocus] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [draft, setDraft] = useState(null);
+  const go = async () => {
+    setBusy(true); setErr('');
+    try { setDraft(await S.planWithClaude(day, { from, to, focus: focus.trim() })); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  if (!hasKey) {
+    return (
+      <Sheet title="Plan with Claude" onClose={onClose} actions={<button class="btn" onClick={onClose}>OK</button>}>
+        <p class="small" style="margin:0">Add your Claude API key in <b>You → Settings → Claude</b>. Then Claude can build your day from your backlog, the next PT syllabus and your weakest chapters.</p>
+      </Sheet>
+    );
+  }
+  return (
+    <Sheet title={`Plan ${fmtDate(day, true)}`} onClose={onClose}
+      actions={draft ? <>
+        <button class="btn ghost" onClick={() => setDraft(null)}>Try again</button>
+        <button class="btn" onClick={() => { S.addBlocks(draft); sfx.chime(); onClose(); }}>Add {draft.length} blocks</button>
+      </> : <button class="btn" disabled={busy} onClick={go}>{busy ? 'Claude is planning…' : 'Make a plan'}</button>}>
+      {!draft ? (
+        <>
+          <div class="row">
+            <label class="field grow">Free from<input class="input" type="time" value={from} onInput={(e) => setFrom(e.target.value)} /></label>
+            <label class="field grow">Until<input class="input" type="time" value={to} onInput={(e) => setTo(e.target.value)} /></label>
+          </div>
+          <label class="field">Anything to focus on? (optional)
+            <input class="input" value={focus} onInput={(e) => setFocus(e.target.value)} placeholder="e.g. definite integration, organic revision" />
+          </label>
+          <p class="small muted" style="margin:0">Claude sees your backlog, the next PT's syllabus, your weakest chapters from the mistake log, and anything already planned that day.</p>
+          {busy && <div class="thinking"><i /><i /><i /></div>}
+          {err && <p class="small" style="color:var(--bad);margin:10px 0 0">{err}</p>}
+        </>
+      ) : (
+        <div class="timeline">
+          {draft.map((b) => (
+            <div key={b.id} class="block" style={`--bc:var(--s-${b.subj || 'none'}, var(--cy))`}>
+              <div class="block-time"><b>{fmtTime(b.start)}</b><span>{fmtTime(b.end)}</span></div>
+              <div class="block-body"><div class="block-title">{b.title}</div></div>
+              <button class="link" style="padding:0 12px" aria-label="Remove" onClick={() => setDraft(draft.filter((x) => x.id !== b.id))}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </Sheet>
   );
 }

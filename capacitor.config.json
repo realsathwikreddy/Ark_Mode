@@ -9,6 +9,16 @@
     "LocalNotifications": {
       "iconColor": "#8c9eff",
       "smallIcon": "ic_stat_arkmode"
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "statsUrl": "",
+      "updateUrl": "",
+      "channelUrl": "",
+      "appReadyTimeout": 15000,
+      "autoDeleteFailed": true,
+      "autoDeletePrevious": true,
+      "resetWhenUpdate": true
     }
   }
 }
