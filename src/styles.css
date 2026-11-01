@@ -339,3 +339,5 @@ textarea.input { min-height: 72px; resize: vertical; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
 .bl .boss-art { width: 40px; height: 40px; animation: none; }
+
+.main { touch-action: pan-y; }

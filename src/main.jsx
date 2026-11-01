@@ -20,7 +20,7 @@ import { applyTheme } from './themes.js';
 import { countTo } from './dust.js';
 import { burst, centerOf } from './fx.js';
 import { blocksFor, blockRange, nowAndNext, fmtTime } from './planner.js';
-import { scheduleReminders, askNotificationPermission, isNative, updateWidget, schedulePlan } from './native.js';
+import { scheduleReminders, askNotificationPermission, isNative, updateWidget, schedulePlan, haptic } from './native.js';
 import { sfx } from './sfx.js';
 import { RadarScreen } from './Radar.jsx';
 import { appReady, checkForUpdate, applyNow, openLink } from './updates.js';
@@ -126,6 +126,48 @@ function App() {
     sfx.whoosh();
     setScreenRaw(key);
   };
+  // Swipe left/right anywhere in the content to move between tabs. The content follows your finger.
+  const swipe = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    if (e.touches.length > 1 || t.clientX < 24 || t.clientX > innerWidth - 24) return; // leave Android's edge-back gesture alone
+    if (e.target.closest('input, textarea, select, .no-swipe, .scrim, .moment')) return;
+    swipe.current = { x: t.clientX, y: t.clientY, t: Date.now(), lock: null, el: e.currentTarget };
+  };
+  const onTouchMove = (e) => {
+    const s = swipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (!s.lock) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      s.lock = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'x' : 'y';
+    }
+    if (s.lock !== 'x') return;
+    const ni = idx - Math.sign(dx);
+    const edge = idx < 0 || ni < 0 || ni >= SCREENS.length;
+    const pull = edge ? dx * 0.15 : dx * 0.45;
+    s.dx = dx;
+    s.el.style.transition = 'none';
+    s.el.style.transform = `translateX(${pull}px)`;
+    s.el.style.opacity = String(1 - Math.min(0.35, Math.abs(dx) / 900));
+  };
+  const onTouchEnd = () => {
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s || s.lock !== 'x') return;
+    const dx = s.dx || 0;
+    const fast = Math.abs(dx) > 40 && Date.now() - s.t < 260;
+    const ni = (idx < 0 ? SCREENS.findIndex((x) => x.key === 'home') : idx) - Math.sign(dx);
+    s.el.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s';
+    s.el.style.transform = '';
+    s.el.style.opacity = '';
+    if ((Math.abs(dx) > innerWidth * 0.22 || fast) && ni >= 0 && ni < SCREENS.length) {
+      haptic('light');
+      setScreen(SCREENS[ni].key);
+    }
+  };
+
   const go = (key, sub) => {
     if (key === 'tasks' && sub) setTaskTab(sub);
     if (key === 'study' && sub) setStudyTab(sub);
@@ -223,7 +265,7 @@ function App() {
       <div class={`stage ${monsoon && state.settings.lens !== false ? 'lensed' : ''}`}>
       <Hero state={state} />
       {state.update && <UpdateBar u={state.update} />}
-      <main class={`main enter ${dir > 0 ? 'from-right' : 'from-left'}`} key={screen}>
+      <main class={`main enter ${dir > 0 ? 'from-right' : 'from-left'}`} key={screen} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
         {screen === 'home' && <HomeScreen state={state} go={go} />}
         {screen === 'tasks' && <TasksScreen state={state} tab={taskTab} setTab={setTaskTab} />}
         {screen === 'study' && <StudyScreen state={state} sub={studyTab} setSub={setStudyTab} />}
