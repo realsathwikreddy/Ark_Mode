@@ -1,12 +1,19 @@
 // Monsoon theme: a rainy city at night behind the app, and water drops sitting on the glass
 // that magnify and bend whatever is underneath them (text, lines, cards).
 import { useEffect, useRef, useState } from 'preact/hooks';
+import nycUrl from './assets/city.jpg';
+
+// Photo: rainy neon street at night, chosen by Sathwik.
+const nyc = new Image();
+nyc.src = nycUrl;
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 // ---------- the city: drawn once into a canvas ----------
 function drawCity(cv) {
+  if (nyc.complete && nyc.naturalWidth) return drawPhoto(cv);
+  nyc.onload = () => drawPhoto(cv);
   const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext('2d');
@@ -61,6 +68,36 @@ function drawCity(cv) {
   // haze over everything so the UI stays readable
   const haze = g.createLinearGradient(0, 0, 0, H);
   haze.addColorStop(0, 'rgba(6,10,22,.55)'); haze.addColorStop(0.5, 'rgba(6,10,22,.35)'); haze.addColorStop(1, 'rgba(6,10,22,.6)');
+  g.fillStyle = haze; g.fillRect(0, 0, W, H);
+}
+
+// The real city: cover-crop the photo onto the tall buildings, push it into a rainy night.
+function drawPhoto(cv) {
+  const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d');
+  g.scale(dpr, dpr);
+  const iw = nyc.naturalWidth, ih = nyc.naturalHeight;
+  const sc = Math.max(W / iw, H / ih) * 1.06;
+  const dw = iw * sc, dh = ih * sc;
+  const focusX = 0.5;
+  const dx = Math.min(0, Math.max(W - dw, W / 2 - dw * focusX));
+  const dy = (H - dh) / 2;
+  g.filter = 'blur(1.2px) saturate(1.15) brightness(.78)';
+  g.drawImage(nyc, dx, dy, dw, dh);
+  g.filter = 'none';
+  // a few extra out-of-focus lights on the glass
+  for (let i = 0; i < 8; i++) {
+    const bx = rnd(0, W), by = rnd(H * 0.3, H);
+    const r = rnd(8, 30);
+    const c = ['255,190,110', '255,230,170', '143,216,255', '255,95,162', '255,140,90'][(Math.random() * 5) | 0];
+    const b = g.createRadialGradient(bx, by, 0, bx, by, r);
+    b.addColorStop(0, `rgba(${c},${rnd(0.18, 0.4)})`); b.addColorStop(0.7, `rgba(${c},${rnd(0.05, 0.12)})`); b.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = b; g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill();
+  }
+  // darken top and bottom so the header and nav stay readable
+  const haze = g.createLinearGradient(0, 0, 0, H);
+  haze.addColorStop(0, 'rgba(5,9,20,.66)'); haze.addColorStop(0.3, 'rgba(5,9,20,.32)'); haze.addColorStop(0.7, 'rgba(5,9,20,.3)'); haze.addColorStop(1, 'rgba(5,9,20,.72)');
   g.fillStyle = haze; g.fillRect(0, 0, W, H);
 }
 
