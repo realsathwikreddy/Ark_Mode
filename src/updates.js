@@ -36,7 +36,8 @@ export async function checkForUpdate() {
         const cur = await CapacitorUpdater.current();
         if (cur?.bundle?.version === String(v.web)) return { kind: 'none' };
       } catch {}
-      const bundle = await CapacitorUpdater.download({ url: v.bundleUrl || `${BASE}bundles/web-${v.web}.zip`, version: String(v.web) });
+      if (!v.bundleSha256) throw new Error('The update is missing its checksum.');
+      const bundle = await CapacitorUpdater.download({ url: v.bundleUrl || `${BASE}bundles/web-${v.web}.zip`, version: String(v.web), checksum: v.bundleSha256 });
       await CapacitorUpdater.next({ id: bundle.id });
       return { kind: 'web-ready', id: bundle.id, web: v.web, notes: v.notes || '' };
     }

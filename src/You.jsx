@@ -290,7 +290,7 @@ function About({ state }) {
       if (u.kind === 'web-ready') { S.setUpdate(u); setMsg(`Version ${u.web} downloaded.`); }
       else if (u.kind === 'apk') { S.setUpdate(u); setMsg('A new version needs one install.'); }
       else setMsg('You\u2019re on the latest version.');
-    } catch (e) { setMsg(navigator.onLine === false ? 'You\u2019re offline.' : `Couldn\u2019t check: ${e.message}`); }
+    } catch (e) { setMsg(navigator.onLine === false ? 'You\u2019re offline.' : `Couldn\u2019t update right now (${String(e.message).replace(/https?:\/\/\S+/g, '').trim() || 'download failed'}). Try again on wifi.`); }
   };
   return (
     <div class="section">
