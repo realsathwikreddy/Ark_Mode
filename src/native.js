@@ -228,3 +228,51 @@ export async function shareBackup(json) {
   await Share.share({ title: 'Ark Mode backup', files: [res.uri], dialogTitle: 'Save your backup' });
   return 'Backup ready to save.';
 }
+
+// ---------- Ark: voice + reminders ----------
+const ArkVoice = registerPlugin('ArkVoice');
+// Returns what was heard, '' if cancelled, or null when there's no speech engine (desktop browser).
+export async function arkListen(prompt = 'Talk to Ark') {
+  if (!isNative) return null;
+  const r = await ArkVoice.listen({ prompt, lang: 'en-IN' });
+  return (r && r.text) || '';
+}
+export async function arkSpeak(text) {
+  if (!text) return;
+  if (isNative) { try { await ArkVoice.speak({ text }); } catch {} return; }
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-IN'; u.rate = 1.05;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch {}
+}
+export async function arkHush() {
+  if (isNative) { try { await ArkVoice.stop(); } catch {} return; }
+  try { speechSynthesis.cancel(); } catch {}
+}
+
+// Reminders Ark sets. IDs 2000+ so they never clash with daily/plan/focus notifications.
+export const reminderNid = (r) => 2000 + (r.nid % 100000);
+export async function scheduleArkReminders(list) {
+  if (!isNative) return;
+  try {
+    const pending = (await LocalNotifications.getPending()).notifications || [];
+    const ours = pending.filter((n) => n.id >= 2000 && n.id < 102000);
+    if (ours.length) await LocalNotifications.cancel({ notifications: ours.map((n) => ({ id: n.id })) });
+    const soon = list.filter((r) => r.at > Date.now()).slice(0, 60);
+    if (soon.length) {
+      await LocalNotifications.schedule({
+        notifications: soon.map((r) => ({ id: reminderNid(r), title: 'Ark: reminder', body: r.text, schedule: { at: new Date(r.at), allowWhileIdle: true } })),
+      });
+    }
+  } catch (e) { console.warn('ark reminders', e); }
+}
+// Android 12+ only fires notifications on the dot with "Alarms & reminders" allowed.
+export async function exactAlarmsOk() {
+  if (!isNative) return true;
+  try { return (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'; } catch { return true; }
+}
+export async function openExactAlarmSettings() {
+  if (!isNative) return;
+  try { await LocalNotifications.changeExactNotificationSetting(); } catch {}
+}

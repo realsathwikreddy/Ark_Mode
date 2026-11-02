@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import * as S from './store.js';
+import { hasBrain } from './brain.js';
 import * as E from './engine.js';
 import { SUBJECTS } from './seed.js';
 import { blocksFor, blockRange, fmtTime } from './planner.js';
@@ -75,8 +76,8 @@ export function Planner({ state, onFocus }) {
           })}
         </div>
       )}
-      <button class={`claude-plan ${state.settings.claude?.key ? '' : 'off'}`} onClick={() => setAi(true)}>
-        <span class="spark">✦</span>{state.settings.claude?.key ? `Plan ${day === today ? 'today' : fmtDate(day, true)} with Claude` : 'Plan with Claude (add your API key in Settings)'}
+      <button class={`claude-plan ${hasBrain(state.settings) ? '' : 'off'}`} onClick={() => setAi(true)}>
+        <span class="spark">✦</span>{hasBrain(state.settings) ? `Plan ${day === today ? 'today' : fmtDate(day, true)} with Ark` : 'Plan with Ark (add a free Gemini key in You)'}
       </button>
       <Fab label="Add block" onClick={() => setEditing(blank(day))} />
       {ai && <AiPlan state={state} day={day} onClose={() => setAi(false)} />}
@@ -133,7 +134,7 @@ function BlockEditor({ block, onClose }) {
 }
 
 function AiPlan({ state, day, onClose }) {
-  const hasKey = !!state.settings.claude?.key;
+  const hasKey = hasBrain(state.settings);
   const [from, setFrom] = useState('18:00');
   const [to, setTo] = useState('22:30');
   const [focus, setFocus] = useState('');
@@ -148,8 +149,8 @@ function AiPlan({ state, day, onClose }) {
   };
   if (!hasKey) {
     return (
-      <Sheet title="Plan with Claude" onClose={onClose} actions={<button class="btn" onClick={onClose}>OK</button>}>
-        <p class="small" style="margin:0">Add your Claude API key in <b>You → Settings → Claude</b>. Then Claude can build your day from your backlog, the next PT syllabus and your weakest chapters.</p>
+      <Sheet title="Plan with Ark" onClose={onClose} actions={<button class="btn" onClick={onClose}>OK</button>}>
+        <p class="small" style="margin:0">Add a free Gemini key (or your Claude key) in <b>You → Ark’s brain</b>. Then Ark can build your day from your backlog, the next PT syllabus and your weakest chapters.</p>
       </Sheet>
     );
   }
@@ -158,7 +159,7 @@ function AiPlan({ state, day, onClose }) {
       actions={draft ? <>
         <button class="btn ghost" onClick={() => setDraft(null)}>Try again</button>
         <button class="btn" onClick={() => { S.addBlocks(draft); sfx.chime(); onClose(); }}>Add {draft.length} blocks</button>
-      </> : <button class="btn" disabled={busy} onClick={go}>{busy ? 'Claude is planning…' : 'Make a plan'}</button>}>
+      </> : <button class="btn" disabled={busy} onClick={go}>{busy ? 'Ark is planning…' : 'Make a plan'}</button>}>
       {!draft ? (
         <>
           <div class="row">
@@ -168,7 +169,7 @@ function AiPlan({ state, day, onClose }) {
           <label class="field">Anything to focus on? (optional)
             <input class="input" value={focus} onInput={(e) => setFocus(e.target.value)} placeholder="e.g. definite integration, organic revision" />
           </label>
-          <p class="small muted" style="margin:0">Claude sees your backlog, the next PT's syllabus, your weakest chapters from the mistake log, and anything already planned that day.</p>
+          <p class="small muted" style="margin:0">Ark sees your backlog, the next PT's syllabus, your weakest chapters from the mistake log, and anything already planned that day.</p>
           {busy && <div class="thinking"><i /><i /><i /></div>}
           {err && <p class="small" style="color:var(--bad);margin:10px 0 0">{err}</p>}
         </>

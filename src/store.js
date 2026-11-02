@@ -7,13 +7,16 @@ import { ACHIEVEMENTS, newlyEarned } from './achievements.js';
 import { sfx, setSoundEnabled } from './sfx.js';
 import { haptic, setHapticsEnabled, screenUsage, screenPermission, isNative } from './native.js';
 import { FRAMES } from './frames.jsx';
-import { blockRange } from './planner.js';
+import { blockRange, nowAndNext } from './planner.js';
 import { fetchJson } from './updates.js';
 import { feedConfigure, feedSchedule, feedTakePending } from './native.js';
-import { ask, parseJson } from './claude.js';
+import { parseJson } from './claude.js';
+import { ask, hasBrain, brainLabel } from './brain.js';
+import { parseOffline, bestMatch, localIso, whenWords, dateKey } from './arkparse.js';
+import { scheduleFocusEnd, scheduleArkReminders } from './native.js';
 
 const KEY = 'arkmode-state-v1';
-const UI_KEYS = ['toasts', 'queue', 'bossFx', 'checkin', 'undo', 'locked', 'screenToday', 'quickAdd', 'fx', 'update'];
+const UI_KEYS = ['toasts', 'queue', 'bossFx', 'checkin', 'undo', 'locked', 'screenToday', 'quickAdd', 'fx', 'update', 'arkOpen'];
 let state = null;
 const listeners = new Set();
 let saveTimer = null;
@@ -31,6 +34,9 @@ const DEFAULT_SETTINGS = {
   screen: { enabled: false, limits: [] },
   radar: { cats: ['hackathon', 'ai', 'music', 'internship', 'jee'], places: ['online', 'hyderabad', 'india', 'international'], notify: true },
   claude: { key: '', model: 'claude-sonnet-5-5' },
+  gemini: { key: '', model: '' },
+  brain: 'gemini',
+  arkVoice: true,
   lens: true,
 };
 const emptyRadar = () => ({ items: [], saved: [], dismissed: [], read: [], updated: null, smart: false, verdicts: {} });
@@ -52,6 +58,7 @@ function initialState() {
     bossHistory: [],
     achievements: {},
     plan: [],
+    reminders: [],
     planDone: {},
     store: { owned: [], frame: null },
     radar: emptyRadar(),
@@ -76,9 +83,11 @@ function migrate(saved) {
       screen: { ...DEFAULT_SETTINGS.screen, ...(saved.settings?.screen || {}) },
       radar: { ...DEFAULT_SETTINGS.radar, ...(saved.settings?.radar || {}) },
       claude: { ...DEFAULT_SETTINGS.claude, ...(saved.settings?.claude || {}) },
+      gemini: { ...DEFAULT_SETTINGS.gemini, ...(saved.settings?.gemini || {}) },
     },
     radar: { ...emptyRadar(), ...(saved.radar || {}) },
     plan: saved.plan || [],
+    reminders: (saved.reminders || []).filter((r) => r.at > Date.now() - 86400000),
     planDone: saved.planDone || {},
     store: { owned: [], frame: null, ...(saved.store || {}) },
     stats: { ...base.stats, ...(saved.stats || {}) },
@@ -797,7 +806,7 @@ export async function refreshRadar({ manual = false } = {}) {
     const fresh = feed.items.filter((i) => !known.has(i.id));
     setState((s) => ({ ...s, radar: { ...s.radar, items: [...feed.items, ...keepSaved], updated: feed.updated, fetchedAt: Date.now() } }));
     syncFeedPrefs();
-    if (state.radar.smart && state.settings.claude?.key) smartFilter().catch(() => {});
+    if (state.radar.smart && hasBrain(state.settings)) smartFilter().catch(() => {});
     const rs = state.settings.radar;
     return fresh.filter((i) => rs.cats.includes(i.cat) && rs.places.includes(i.place)).length;
   } finally {
@@ -807,7 +816,7 @@ export async function refreshRadar({ manual = false } = {}) {
 // Claude reads listings it hasn't judged yet and scores them for Sathwik.
 let smartBusy = false;
 export async function smartFilter() {
-  if (smartBusy || !state.settings.claude?.key) return;
+  if (smartBusy || !hasBrain(state.settings)) return;
   smartBusy = true;
   try {
     const todo = radarItemsRaw().filter((i) => !state.radar.verdicts?.[i.id]).slice(0, 25);
@@ -871,3 +880,211 @@ export function addBlocks(blocks) {
 export function setUpdate(u) {
   setState((s) => ({ ...s, update: u }), { save: false });
 }
+
+export function setGemini(patch) {
+  setState((s) => ({ ...s, settings: { ...s.settings, gemini: { ...s.settings.gemini, ...patch } } }));
+}
+
+// ---------- Ark: the voice assistant ----------
+const SUBJ_NAME = { m: 'Maths', p: 'Physics', c: 'Chemistry' };
+const hm = (ms) => new Date(ms).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s?([ap])\.?m\.?/i, (_, x) => ` ${x.toUpperCase()}M`);
+
+function arkContext() {
+  const s = state;
+  const t = today();
+  const ds = s.settings.dayStart ?? 3;
+  const nowMs = now();
+  const due = s.tasks.filter((x) => E.isDue(x, t));
+  const left = due.filter((x) => !x.completed);
+  const todos = s.tasks.filter((x) => x.type === 'todo' && !x.completed);
+  const { now: cur, next } = nowAndNextSafe(t, nowMs, ds);
+  const b = s.boss?.status === 'active' ? s.boss : null;
+  const rem = (s.reminders || []).filter((r) => r.at > nowMs).sort((a, z) => a.at - z.at);
+  const days = s.settings.examDate ? E.daysBetween(t, s.settings.examDate) : null;
+  const nextPaper = s.pts.flatMap((pt) => pt.papers.map((p) => ({ ...p, n: pt.n }))).filter((p) => p.date >= t).sort((a, z) => a.date.localeCompare(z.date))[0];
+  const answers = {
+    next: cur ? `Right now: ${cur.title}, until ${hm(cur.end)}.${next ? ` Then ${next.title} at ${hm(next.start)}.` : ''}` : next ? `Next up: ${next.title} at ${hm(next.start)}.` : `Nothing else planned today.${left.length ? ` You have ${left.length} ${left.length === 1 ? 'daily' : 'dailies'} left.` : ''}`,
+    health: `You're at ${Math.round(s.user.hp)} out of ${E.MAX_HP} health.${s.user.hp < 20 ? ' That’s low. A potion costs 25 gold.' : ''}`,
+    boss: b ? `${b.name} has ${b.hp} of ${b.maxHp} health left. It fights back on ${b.end}.` : 'No boss right now. The next one shows up on Monday.',
+    gold: `You have ${s.user.gp.toFixed(1)} gold.`,
+    level: `Level ${s.user.lvl}, ${E.titleFor(s.user.lvl)}. ${E.toNextLevel(s.user.lvl) - Math.round(s.user.exp)} XP to the next level.`,
+    left: left.length ? `${left.length} left today: ${left.slice(0, 4).map((x) => x.text).join(', ')}.${todos.length ? ` Plus ${todos.length} open to-dos.` : ''}` : `All dailies done.${todos.length ? ` ${todos.length} to-dos still open.` : ''}`,
+    reminders: rem.length ? `${rem.length} ${rem.length === 1 ? 'reminder' : 'reminders'}. Next: ${rem[0].text}, ${whenWords(rem[0].at, nowMs)}.` : 'No reminders set.',
+    exam: days != null ? `${days} days to ${s.settings.examName || 'the exam'}.${nextPaper ? ` Next paper: ${nextPaper.name} on ${nextPaper.date}.` : ''}` : 'No exam date set.',
+  };
+  return { now: nowMs, today: t, focusMinutes: s.settings.focusMinutes, answers, due, left, todos, rem, cur, next, b, nextPaper };
+}
+function nowAndNextSafe(t, nowMs, ds) {
+  try { return nowAndNext(state.plan, t, nowMs, ds); } catch { return { now: null, next: null, list: [] }; }
+}
+
+const ARK_SYSTEM = `You are Ark, the voice assistant inside Ark Mode, a habit and study app for Sathwik, a class 12 JEE aspirant in Hyderabad. He speaks to you; you turn what he says into app actions and a short spoken reply.
+Reply with ONLY a JSON object: {"say": "...", "actions": [...]}.
+"say" is spoken aloud: one or two short sentences, casual, like a sharp friend. Say times like "9:40 PM". No emoji, no markdown.
+Actions (use only these, with exactly these fields):
+{"do":"remind","text":"what to remind","at":"YYYY-MM-DDTHH:MM"}   (local time; must be in the future)
+{"do":"cancel_reminder","text":"which one"}
+{"do":"add_task","type":"todo"|"daily"|"habit","text":"short task","priority":"trivial"|"easy"|"medium"|"hard","subj":"m"|"p"|"c"|null,"due":"YYYY-MM-DD"|null}
+{"do":"complete","task":"exact text of an open task from the list"}
+{"do":"add_block","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","title":"...","subj":"m"|"p"|"c"|null}   (planner block, 24h)
+{"do":"move_block","block":"title of existing block","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}
+{"do":"delete_block","block":"title of existing block"}
+{"do":"focus","minutes":50,"label":"what","subj":"m"|"p"|"c"|null}
+{"do":"stop_focus"}
+{"do":"marks","pt":14,"kind":"mains"|"adv","m":72,"p":58,"c":66}   (omit subjects not given)
+{"do":"potion"}
+{"do":"open","screen":"home"|"tasks"|"study"|"tests"|"store"|"you"|"radar"}
+Rules: "in 20 minutes" means now plus 20 minutes. A bare hour like "at 7" means the next 7 o'clock that hasn't passed (use sense: "wake me at 6" is morning). The app day resets at 3 AM. If he only asks a question, answer it in "say" from the data with no actions. If something is unclear, ask a short question in "say" with no actions. Never invent tasks or marks he didn't mention. You are not a general chatbot: for unrelated questions, give a one-line answer.`;
+
+function arkData(c) {
+  const s = state;
+  const d = new Date(c.now);
+  const plan = (day) => s.plan.filter((b) => (b.repeat === 'once' ? b.date === day : b.days?.[E.parseKey(day).getDay()])).map((b) => `${b.start}-${b.end} ${b.title}`).join('; ') || 'nothing';
+  const tomorrow = E.addDays(c.today, 1);
+  return [
+    `Now: ${localIso(d)} (${d.toLocaleDateString('en-IN', { weekday: 'long' })}). App day: ${c.today}.`,
+    `Stats: level ${s.user.lvl}, health ${Math.round(s.user.hp)}/${E.MAX_HP}, gold ${s.user.gp.toFixed(1)}, XP ${Math.round(s.user.exp)}/${E.toNextLevel(s.user.lvl)}.`,
+    c.b ? `Boss: ${c.b.name}, ${c.b.hp}/${c.b.maxHp} HP, fight ends ${c.b.end}.` : 'Boss: none this week.',
+    `Dailies due today: ${c.due.map((x) => `${x.text}${x.completed ? ' (done)' : ''}`).join('; ') || 'none'}.`,
+    `Open to-dos: ${c.todos.slice(0, 25).map((x) => `${x.text}${x.due ? ` (due ${x.due})` : ''}`).join('; ') || 'none'}.`,
+    `Habits: ${s.tasks.filter((x) => x.type === 'habit').map((x) => x.text).join('; ') || 'none'}.`,
+    `Plan today: ${plan(c.today)}. Plan tomorrow: ${plan(tomorrow)}.`,
+    `Reminders: ${c.rem.map((r) => `${r.text} at ${localIso(new Date(r.at))}`).join('; ') || 'none'}.`,
+    `Focus timer: ${s.focus.running ? `running, ${s.focus.running.minutes} min ${s.focus.running.kind}` : 'off'}. Default focus length ${s.settings.focusMinutes} min.`,
+    c.nextPaper ? `Next paper: ${c.nextPaper.name} (PT-${c.nextPaper.n}) on ${c.nextPaper.date}.` : '',
+    s.settings.examDate ? `${s.settings.examName}: ${s.settings.examDate}.` : '',
+  ].filter(Boolean).join('\n');
+}
+
+async function arkThink(text, c) {
+  const reply = await ask(state.settings, { system: ARK_SYSTEM, prompt: `${arkData(c)}\n\nSathwik said: "${text}"`, maxTokens: 700, json: true });
+  const j = parseJson(reply);
+  return { say: String(j.say || ''), actions: Array.isArray(j.actions) ? j.actions : [] };
+}
+
+const HHMM = /^\d{1,2}:\d{2}$/;
+const fixHm = (x) => (HHMM.test(x || '') ? x.padStart(5, '0') : null);
+const okDate = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(x || '') ? x : null);
+
+// Carries out one action. Returns { ok, msg?, open? }.
+function arkDo(a, c) {
+  switch (a.do) {
+    case 'remind': {
+      const at = new Date(a.at).getTime();
+      if (!at || Number.isNaN(at)) return { ok: false, msg: 'I couldn’t work out the time for that reminder.' };
+      if (at <= now()) return { ok: false, msg: 'That time has already passed.' };
+      const r = { id: uid(), nid: Math.floor(Math.random() * 99999), text: String(a.text || 'Reminder').slice(0, 120), at };
+      setState((s) => ({ ...s, reminders: [...(s.reminders || []), r].sort((x, z) => x.at - z.at) }));
+      return { ok: true, msg: `Reminder ${whenWords(at, now())}: ${r.text}` };
+    }
+    case 'cancel_reminder': {
+      const r = bestMatch(String(a.text || ''), c.rem);
+      if (!r) return { ok: false, msg: 'I couldn’t find that reminder.' };
+      setState((s) => ({ ...s, reminders: s.reminders.filter((x) => x.id !== r.id) }));
+      return { ok: true, msg: `Cancelled: ${r.text}` };
+    }
+    case 'add_task': {
+      const type = ['todo', 'daily', 'habit'].includes(a.type) ? a.type : 'todo';
+      const text = String(a.text || '').trim().slice(0, 120);
+      if (!text) return { ok: false };
+      const base = { id: uid(), type, text, notes: 'Added by Ark', priority: E.PRIORITY[a.priority] != null ? a.priority : 'easy', value: 0, createdAt: now(), checklist: [], tag: ['m', 'p', 'c'].includes(a.subj) ? a.subj : null };
+      const task = type === 'habit' ? { ...base, up: true, down: false, countUp: 0, countDown: 0 }
+        : type === 'daily' ? { ...base, frequency: 'weekly', days: [true, true, true, true, true, true, true], everyX: 1, startDate: today(), streak: 0, completed: false }
+        : { ...base, due: okDate(a.due) || '', completed: false };
+      saveTask(task);
+      return { ok: true, msg: `Added ${type === 'todo' ? 'to-do' : type}: ${text}` };
+    }
+    case 'complete': {
+      const pool = [...c.left, ...c.todos, ...state.tasks.filter((x) => x.type === 'habit' && x.up)];
+      const t = bestMatch(String(a.task || ''), [...new Map(pool.map((x) => [x.id, x])).values()]);
+      if (!t) return { ok: false, msg: `I couldn’t find an open task like “${a.task}”.` };
+      if (t.type === 'habit') scoreHabit(t.id, 'up'); else toggleTask(t.id);
+      return { ok: true, msg: `Ticked off: ${t.text}` };
+    }
+    case 'add_block': {
+      const start = fixHm(a.start), end = fixHm(a.end), date = okDate(a.date) || today();
+      if (!start || !end || !a.title) return { ok: false, msg: 'I need a start and end time for that block.' };
+      saveBlock({ id: uid(), title: String(a.title).slice(0, 80), subj: ['m', 'p', 'c'].includes(a.subj) ? a.subj : null, start, end, repeat: 'once', date, days: [0, 1, 2, 3, 4, 5, 6].map(() => false), ai: true });
+      return { ok: true, msg: `Planned ${a.title}, ${start}–${end}` };
+    }
+    case 'move_block':
+    case 'delete_block': {
+      const b = bestMatch(String(a.block || ''), state.plan, (x) => x.title);
+      if (!b) return { ok: false, msg: `I couldn’t find a block called “${a.block}”.` };
+      if (a.do === 'delete_block') { setState((s) => ({ ...s, plan: s.plan.filter((x) => x.id !== b.id) })); return { ok: true, msg: `Removed ${b.title}` }; }
+      const start = fixHm(a.start) || b.start, end = fixHm(a.end) || b.end;
+      saveBlock({ ...b, start, end, ...(b.repeat === 'once' ? { date: okDate(a.date) || b.date } : {}) });
+      return { ok: true, msg: `Moved ${b.title} to ${start}–${end}` };
+    }
+    case 'focus': {
+      if (state.focus.running) return { ok: false, msg: 'A timer is already running.' };
+      const min = Math.max(5, Math.min(180, Math.round(Number(a.minutes) || state.settings.focusMinutes || 50)));
+      const subj = ['m', 'p', 'c'].includes(a.subj) ? a.subj : 'm';
+      startFocus(min, String(a.label || SUBJ_NAME[subj]).slice(0, 60), subj);
+      scheduleFocusEnd({ start: now(), minutes: min, kind: 'focus' });
+      return { ok: true, msg: `Focus: ${min} minutes`, open: 'study:focus' };
+    }
+    case 'stop_focus': {
+      if (!state.focus.running) return { ok: false, msg: 'No timer is running.' };
+      stopFocus(false); scheduleFocusEnd(null);
+      return { ok: true, msg: 'Timer stopped' };
+    }
+    case 'marks': {
+      const pt = state.pts.find((p) => p.n === Number(a.pt));
+      const kind = a.kind === 'adv' ? 'adv' : 'mains';
+      const paper = pt?.papers.find((p) => p.kind === kind);
+      if (!paper) return { ok: false, msg: `I couldn’t find PT-${a.pt}.` };
+      const scores = { ...paper.scores };
+      ['m', 'p', 'c'].forEach((k) => { const v = Number(a[k]); if (a[k] != null && Number.isFinite(v)) scores[k] = v; });
+      updatePaper(pt.id, paper.id, { scores });
+      return { ok: true, msg: `${paper.name}: ${['m', 'p', 'c'].map((k) => `${SUBJ_NAME[k]} ${scores[k] ?? '–'}`).join(', ')}`, open: 'tests' };
+    }
+    case 'potion':
+      return drinkPotion() ? { ok: true, msg: 'Drank a Health Potion' } : { ok: false, msg: state.user.hp >= E.MAX_HP ? 'Health is already full.' : 'Not enough gold for a potion.' };
+    case 'open':
+      return { ok: true, open: a.screen };
+    default:
+      return { ok: false };
+  }
+}
+
+// Runs one thing Sathwik said. Returns { say, done: [msg], failed: [msg], via, open }.
+export async function runArk(text) {
+  const c = arkContext();
+  let res = null;
+  let via = 'Offline';
+  let note = '';
+  if (hasBrain(state.settings) && navigator.onLine !== false) {
+    try { res = await arkThink(text, c); via = brainLabel(state.settings); }
+    catch (e) { note = e.message; res = parseOffline(text, c); }
+  } else res = parseOffline(text, c);
+  if (!res) {
+    return { say: note || 'I didn’t get that. Try “remind me at 9 to call Rahul”, “add a to-do …” or “start 50 minutes of physics”.', done: [], failed: [], via };
+  }
+  const snap = snapshot();
+  const done = [], failed = [];
+  let open = null;
+  res.actions.slice(0, 8).forEach((a) => {
+    try {
+      const r = arkDo(a, arkContext());
+      if (r.open) open = r.open;
+      if (r.ok && r.msg) done.push(r.msg);
+      if (!r.ok && r.msg) failed.push(r.msg);
+    } catch (e) { failed.push(String(e.message || e)); }
+  });
+  let say = res.say;
+  if (failed.length) say = failed.join(' ');
+  else if (!say) say = done.length ? `${done.join('. ')}.` : 'Done.';
+  if (done.length) {
+    sfx.chime(); haptic('success');
+    offerUndo('Ark made changes', snap);
+  }
+  return { say, done, failed, via: note && via === 'Offline' ? 'Offline (AI unreachable)' : via, open };
+}
+
+export function cancelReminder(id) {
+  setState((s) => ({ ...s, reminders: (s.reminders || []).filter((r) => r.id !== id) }));
+}
+export function syncArkReminders() { return scheduleArkReminders(state.reminders || []); }
+export function requestArk(listen = true) { setState((s) => ({ ...s, arkOpen: { at: now(), listen } }), { save: false }); }
+export function closeArk() { setState((s) => ({ ...s, arkOpen: null }), { save: false }); }

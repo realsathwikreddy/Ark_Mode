@@ -82,6 +82,12 @@ public class ArkWidgetProvider extends AppWidgetProvider {
         PendingIntent addPi = PendingIntent.getActivity(ctx, 1, add, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         v.setOnClickPendingIntent(R.id.w_add, addPi);
 
+        Intent ark = new Intent(Intent.ACTION_VIEW, Uri.parse("arkmode://ark"));
+        ark.setPackage(ctx.getPackageName());
+        ark.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent arkPi = PendingIntent.getActivity(ctx, 2, ark, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        v.setOnClickPendingIntent(R.id.w_ark, arkPi);
+
         boolean hasBoss = p.getBoolean("hasBoss", false);
         v.setViewVisibility(R.id.w_boss_box, hasBoss ? View.VISIBLE : View.GONE);
         v.setViewVisibility(R.id.w_no_boss, hasBoss ? View.GONE : View.VISIBLE);

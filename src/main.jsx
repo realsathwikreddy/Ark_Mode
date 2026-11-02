@@ -25,6 +25,7 @@ import { sfx } from './sfx.js';
 import { RadarScreen } from './Radar.jsx';
 import { appReady, checkForUpdate, applyNow, openLink } from './updates.js';
 import { Rain } from './rain.jsx';
+import { ArkSheet } from './Ark.jsx';
 
 const SCREENS = [
   { key: 'home', name: 'Home', icon: 'home' },
@@ -189,7 +190,8 @@ function App() {
     const subs = [];
     const openUrl = (url) => {
       if (!url) return;
-      if (url.includes('add')) { go('tasks', 'todo'); S.requestQuickAdd(); }
+      if (url.includes('//ark')) S.requestArk(true);
+      else if (url.includes('add')) { go('tasks', 'todo'); S.requestQuickAdd(); }
       else if (url.includes('radar')) go('radar');
       else if (url.includes('update')) go('you');
     };
@@ -248,6 +250,7 @@ function App() {
     [state.tasks, state.settings.reminders, state.settings.reminderTime, state.settings.restMode, state.lastCron]);
   useEffect(() => { const t = setTimeout(() => schedulePlan(state, blocksFor, blockRange), 900); return () => clearTimeout(t); },
     [state.plan, state.lastCron]);
+  useEffect(() => { const t = setTimeout(() => S.syncArkReminders(), 700); return () => clearTimeout(t); }, [state.reminders]);
 
   // Potion: particles rise out of the health bar.
   useEffect(() => {
@@ -286,6 +289,7 @@ function App() {
       <UndoBar undo={state.undo} />
       <div class="toasts" aria-live="polite">{state.toasts.map((t) => <div key={t.id} class={`toast ${t.tone}`}>{t.tone === 'ach' && <i class="ach-hex" />}{t.text}</div>)}</div>
       {state.checkin && <Checkin state={state} />}
+      {state.arkOpen && <ArkSheet key={state.arkOpen.at} state={state} go={go} autoListen={state.arkOpen.listen} onClose={S.closeArk} />}
       <Moments state={state} />
     </>
   );

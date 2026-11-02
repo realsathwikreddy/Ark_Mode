@@ -86,11 +86,21 @@
                 android:progressDrawable="@drawable/widget_bar_xp" />
         </LinearLayout>
 
+        <ImageView
+            android:id="@+id/w_ark"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/widget_ark_bg"
+            android:contentDescription="Talk to Ark"
+            android:padding="8dp"
+            android:src="@drawable/ic_ark_mic" />
+
         <TextView
             android:id="@+id/w_add"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/widget_add_bg"
             android:contentDescription="Add a to-do"
             android:gravity="center"

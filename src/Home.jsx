@@ -7,6 +7,7 @@ import { fmtDate, relDay } from './ui.jsx';
 import { paperTotal } from './Tests.jsx';
 import { SUBJECTS } from './seed.js';
 import { openLink } from './updates.js';
+import { ArkOrb } from './Ark.jsx';
 
 const greet = (h) => (h < 5 ? 'Late night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night');
 
@@ -34,9 +35,15 @@ export function HomeScreen({ state, go }) {
 
   return (
     <div class="home">
-      <div class="home-hello">
-        <h1>{greet(new Date().getHours())}, {state.settings.name || 'Sathwik'}</h1>
-        <span class="muted small">{fmtDate(today, true)}{daysLeft != null && daysLeft > 0 ? `, ${daysLeft} days to ${state.settings.examName || 'the exam'}` : ''}</span>
+      <div class="home-hello-row">
+        <div class="home-hello">
+          <h1>{greet(new Date().getHours())}, {state.settings.name || 'Sathwik'}</h1>
+          <span class="muted small">{fmtDate(today, true)}{daysLeft != null && daysLeft > 0 ? `, ${daysLeft} days to ${state.settings.examName || 'the exam'}` : ''}</span>
+        </div>
+        <button class="ark-home" aria-label="Talk to Ark" onClick={() => S.requestArk(true)}>
+          <ArkOrb size={52} />
+          <span>Ark</span>
+        </button>
       </div>
 
       <section class={`now-card ${now ? 'live' : ''}`} onClick={() => go('study', 'plan')}>

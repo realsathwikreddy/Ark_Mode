@@ -11,7 +11,8 @@ import { ScreenTimeSection } from './ScreenTime.jsx';
 import { LockSetup } from './Lock.jsx';
 import { buildWorkbook } from './exportxlsx.js';
 import { shareFile } from './native.js';
-import { MODELS, testKey } from './claude.js';
+import { MODELS } from './claude.js';
+import { hasBrain, brainLabel, testBrain } from './brain.js';
 import { WEB_VERSION, NATIVE_VERSION, checkForUpdate, applyNow, openLink } from './updates.js';
 
 export function YouScreen({ state }) {
@@ -38,7 +39,7 @@ export function YouScreen({ state }) {
       <Trophies state={state} />
       <Appearance state={state} />
       <Settings state={state} />
-      <ClaudeSettings state={state} />
+      <BrainSettings state={state} />
       <Backup state={state} />
       <About state={state} />
     </>
@@ -249,33 +250,59 @@ function Settings({ state }) {
   );
 }
 
-function ClaudeSettings({ state }) {
-  const c = state.settings.claude;
-  const [key, setKey] = useState(c.key);
+function KeyField({ value, onSave, placeholder, test }) {
+  const [key, setKey] = useState(value);
   const [show, setShow] = useState(false);
   const [msg, setMsg] = useState('');
   const save = async () => {
-    S.setClaude({ key: key.trim() });
-    if (!key.trim()) { setMsg('Key removed.'); return; }
+    const k = key.trim();
+    onSave(k);
+    if (!k) { setMsg('Key removed.'); return; }
     setMsg('Checking…');
-    try { await testKey({ ...state.settings, claude: { ...c, key: key.trim() } }); setMsg('Key works.'); }
-    catch (e) { setMsg(e.message); }
+    try { await test(k); setMsg('Key works.'); } catch (e) { setMsg(e.message); }
   };
   return (
+    <>
+      <div class="row">
+        <input class="input grow" type={show ? 'text' : 'password'} value={key} onInput={(e) => setKey(e.target.value)} placeholder={placeholder} autoComplete="off" />
+        <button class="btn ghost small" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn small" onClick={save}>Save key</button>{msg && <span class="small">{msg}</span>}</div>
+    </>
+  );
+}
+
+function BrainSettings({ state }) {
+  const st = state.settings;
+  const c = st.claude, g = st.gemini || { key: '' };
+  const pick = st.brain || 'gemini';
+  return (
     <div class="section">
-      <div class="section-head"><h2>Claude</h2><span class="small muted">{c.key ? 'Connected' : 'Not set'}</span></div>
+      <div class="section-head"><h2>Ark’s brain</h2><span class="small muted">{hasBrain(st) ? `Using ${brainLabel(st)}` : 'Offline only'}</span></div>
       <div class="card">
-        <p class="small muted" style="margin:0 0 12px">Your own Claude API key powers "Plan with Claude" and the Radar smart filter. It stays on this phone and is only sent to Anthropic. API use is billed to your Anthropic account.</p>
-        <label class="field">API key
-          <div class="row">
-            <input class="input grow" type={show ? 'text' : 'password'} value={key} onInput={(e) => setKey(e.target.value)} placeholder="sk-ant-…" autoComplete="off" />
-            <button class="btn ghost small" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button>
+        <p class="small muted" style="margin:0 0 12px">The AI behind Ark, Plan with Ark and the Radar smart filter. Keys stay on this phone. Without one, Ark still handles simple commands offline.</p>
+        <div class="field"><span>Use</span>
+          <div class="chips">
+            <button class={`chip ${pick === 'gemini' ? 'on' : ''}`} onClick={() => S.setSetting('brain', 'gemini')}>Gemini (free)</button>
+            <button class={`chip ${pick === 'claude' ? 'on' : ''}`} onClick={() => S.setSetting('brain', 'claude')}>Claude</button>
           </div>
-        </label>
-        <div class="field"><span>Model</span>
-          <div class="chips">{MODELS.map((m) => <button key={m.id} class={`chip ${c.model === m.id ? 'on' : ''}`} onClick={() => S.setClaude({ model: m.id })}>{m.name}</button>)}</div>
         </div>
-        <div class="row"><button class="btn small" onClick={save}>Save key</button>{msg && <span class="small">{msg}</span>}</div>
+        {pick === 'gemini' ? (
+          <label class="field">Gemini API key
+            <span class="small muted">Free from aistudio.google.com → Get API key. On the free tier Google may use what you send to improve its models, so don’t tell Ark anything private.</span>
+            <KeyField value={g.key} placeholder="AIza…" onSave={(k) => S.setGemini({ key: k })} test={(k) => testBrain({ ...st, brain: 'gemini', gemini: { ...g, key: k } })} />
+          </label>
+        ) : (
+          <>
+            <label class="field">Claude API key
+              <span class="small muted">From console.anthropic.com. Billed to your Anthropic account.</span>
+              <KeyField value={c.key} placeholder="sk-ant-…" onSave={(k) => S.setClaude({ key: k })} test={(k) => testBrain({ ...st, brain: 'claude', claude: { ...c, key: k } })} />
+            </label>
+            <div class="field"><span>Model</span>
+              <div class="chips">{MODELS.map((m) => <button key={m.id} class={`chip ${c.model === m.id ? 'on' : ''}`} onClick={() => S.setClaude({ model: m.id })}>{m.name}</button>)}</div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

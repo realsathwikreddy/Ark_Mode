@@ -37,7 +37,7 @@ export function parseJson(text) {
   const m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = m ? m[1] : text;
   const start = body.search(/[[{]/);
-  if (start < 0) throw new Error('Claude did not return a plan.');
+  if (start < 0) throw new Error('The AI sent back something I couldn\u2019t read. Try again.');
   const open = body[start];
   const close = open === '[' ? ']' : '}';
   const end = body.lastIndexOf(close);

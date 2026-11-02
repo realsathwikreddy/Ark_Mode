@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ScreenTimePlugin.class);
         registerPlugin(BioLockPlugin.class);
         registerPlugin(FeedBridgePlugin.class);
+        registerPlugin(ArkVoicePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import * as S from './store.js';
+import { hasBrain, brainLabel } from './brain.js';
 import { Sheet, Switch } from './ui.jsx';
 import { openLink } from './updates.js';
 import { relDay } from './ui.jsx';
@@ -48,7 +49,7 @@ export function RadarScreen({ state }) {
       </div>
       <p class="small muted" style="margin:-6px 0 12px">
         {r.updated ? `Feed updated ${timeAgo(r.updated)}.` : 'Checks for new things every few hours, even when the app is closed.'}
-        {state.settings.claude?.key && r.smart ? ' Claude is filtering it for you.' : ''}
+        {hasBrain(state.settings) && r.smart ? ' Ark is filtering it for you.' : ''}
       </p>
       <div class="seg">
         <button class={tab === 'new' ? 'on' : ''} onClick={() => setTab('new')}>For you<span class="count">{all.filter((i) => !r.dismissed.includes(i.id)).length}</span></button>
@@ -120,7 +121,7 @@ function Interests({ state, onClose }) {
         <Switch checked={rs.notify} onChange={(v) => S.setRadar({ notify: v })} label="Radar notifications" />
       </div>
       <div class="setting">
-        <div class="grow"><div>Smart filter with Claude</div><div class="small muted">{state.settings.claude?.key ? 'Claude reads new listings, hides weak matches and writes a one-line summary. Uses your API key.' : 'Add your Claude API key in You → Settings to use this.'}</div></div>
+        <div class="grow"><div>Smart filter</div><div class="small muted">{hasBrain(state.settings) ? `${brainLabel(state.settings)} reads new listings, hides weak matches and writes a one-line summary.` : 'Add a free Gemini key in You → Ark’s brain to use this.'}</div></div>
         <Switch checked={!!state.radar.smart} onChange={(v) => S.setRadarSmart(v)} label="Smart filter" />
       </div>
     </Sheet>
