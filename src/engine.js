@@ -286,7 +286,8 @@ export function hurt(user0, amount) {
 export const BOSS_DMG_PER_GOLD = 10;
 export const BOSS_REWARD = { gp: 20, exp: 120 };
 export function bossMaxHp(lvl) {
-  return 450 + 25 * (Math.max(1, lvl) - 1);
+  // Tuned so a strong week (most days solid) only just beats it by the paper.
+  return 765 + 40 * (Math.max(1, lvl) - 1);
 }
 export function bossWindow(pt) {
   const m = pt.papers.find((p) => p.kind === 'mains') || pt.papers[0];

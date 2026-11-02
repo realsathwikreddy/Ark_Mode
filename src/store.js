@@ -101,6 +101,12 @@ export async function loadState() {
   if (!state.settings.name || state.settings.name === 'John') state = { ...state, settings: { ...state.settings, name: 'Sathwik' } };
   setSoundEnabled(state.settings.sound);
   setHapticsEnabled(state.settings.haptics);
+  // Bosses got tougher (x1.7). Scale a boss that's already in the fight, keeping the damage done.
+  if (state.boss?.status === 'active' && !state.boss.tough) {
+    const b = state.boss;
+    const maxHp = Math.round(b.maxHp * 1.7);
+    state = { ...state, boss: { ...b, maxHp, hp: Math.max(1, maxHp - (b.maxHp - b.hp)), tough: true } };
+  }
   // Credit badges already earned before achievements existed, quietly.
   const earned = newlyEarned(state, today());
   if (earned.length) state = { ...state, achievements: { ...state.achievements, ...Object.fromEntries(earned.map((id) => [id, today()])) } };
@@ -267,7 +273,7 @@ function ensureBoss(s, t) {
     if (pt && !(cur && cur.n === pt.n)) {
       const w = E.bossWindow(pt);
       const maxHp = E.bossMaxHp(next.user.lvl);
-      next = { ...next, boss: { n: pt.n, name: bossFor(pt.n).name, maxHp, hp: maxHp, start: w.start, end: w.end, status: 'active', hitsOnYou: 0, dealt: 0 } };
+      next = { ...next, boss: { n: pt.n, name: bossFor(pt.n).name, maxHp, hp: maxHp, start: w.start, end: w.end, status: 'active', hitsOnYou: 0, dealt: 0, tough: true } };
       next = enqueue(next, { kind: 'bossArrive', n: pt.n, name: bossFor(pt.n).name, maxHp, end: w.end });
     }
   }
