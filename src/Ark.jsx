@@ -17,8 +17,10 @@ const TRY = [
 // The orb: idle, listening or thinking.
 export function ArkOrb({ mode = 'idle', size = 92, level = 0 }) {
   return (
-    <span class={`ark-orb ${mode}`} style={`--s:${size}px;--lv:${level.toFixed(2)}`} aria-hidden="true">
+    <span class={`ark-orb is-${mode}`} style={`--s:${size}px;--lv:${level.toFixed(2)}`} aria-hidden="true">
+      <i class="ark-halo" />
       <i class="ark-ring r1" /><i class="ark-ring r2" /><i class="ark-ring r3" />
+      <i class="ark-spark k1" /><i class="ark-spark k2" /><i class="ark-spark k3" />
       <span class="ark-core">
         <svg viewBox="0 0 24 24" width={size * 0.34} height={size * 0.34}><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="currentColor" /><path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z" fill="currentColor" /></svg>
       </span>
@@ -117,7 +119,7 @@ export function ArkSheet({ state, onClose, go, autoListen }) {
             </div>
           ))}
           {mode === 'listening' && heard && <div class="ark-msg you live"><div class="ark-bubble">{heard}</div></div>}
-          {mode === 'thinking' && <div class="ark-msg ark"><div class="thinking"><i /><i /><i /></div></div>}
+          {mode === 'thinking' && <div class="ark-msg ark"><ArkThinking /></div>}
           <div ref={end} />
         </div>
 
@@ -171,6 +173,20 @@ function VoicePicker({ state }) {
       </div>
       {!male.length && <p class="small muted" style="margin:8px 0 0">No male voice is installed. Install <b>Speech Recognition &amp; Synthesis by Google</b> from the Play Store, then set it as the preferred engine in Settings → Text-to-speech. Until then Ark uses a deeper pitch.</p>}
       <button class="link small" style="margin-top:6px" onClick={() => setAll(!all)}>{all ? 'Only male voices' : 'Show all voices'}</button>
+    </div>
+  );
+}
+
+// Ark working: a spinning neon ring and a line that changes while it works.
+const STEPS = ['Thinking', 'Reading your day', 'Working it out', 'Almost there'];
+export function ArkThinking() {
+  const [i, setI] = useState(0);
+  useEffect(() => { const t = setInterval(() => setI((n) => Math.min(n + 1, STEPS.length - 1)), 1600); return () => clearInterval(t); }, []);
+  return (
+    <div class="ark-think" role="status">
+      <span class="ark-think-ring"><i /></span>
+      <span class="ark-think-text" key={i}>{STEPS[i]}</span>
+      <span class="ark-wave"><i /><i /><i /><i /><i /></span>
     </div>
   );
 }
