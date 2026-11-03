@@ -231,18 +231,37 @@ export async function shareBackup(json) {
 
 // ---------- Ark: voice + reminders ----------
 const ArkVoice = registerPlugin('ArkVoice');
-// Returns what was heard, '' if cancelled, or null when there's no speech engine (desktop browser).
-export async function arkListen(prompt = 'Talk to Ark') {
+// Returns what was heard, '' if nothing, or null when there's no speech engine (desktop browser).
+// onEvent gets { partial } (words so far), { level } (0–1 loudness) and { state }.
+export async function arkListen(onEvent = () => {}) {
   if (!isNative) return null;
-  const r = await ArkVoice.listen({ prompt, lang: 'en-IN' });
-  return (r && r.text) || '';
+  const subs = await Promise.all([
+    ArkVoice.addListener('partial', (e) => onEvent({ partial: e.value })),
+    ArkVoice.addListener('level', (e) => onEvent({ level: e.level })),
+    ArkVoice.addListener('state', (e) => onEvent({ state: e.value })),
+  ]).catch(() => []);
+  try {
+    const r = await ArkVoice.listen({ lang: 'en-IN' });
+    return (r && r.text) || '';
+  } finally {
+    subs.forEach((h) => h.remove());
+  }
 }
+export async function arkStopListening() { if (isNative) { try { await ArkVoice.stopListening(); } catch {} } }
+export async function arkCancelListening() { if (isNative) { try { await ArkVoice.cancelListening(); } catch {} } }
+export async function arkVoices() {
+  if (!isNative) return { voices: [], current: '', ready: false };
+  try { return await ArkVoice.voices(); } catch { return { voices: [], current: '', ready: false }; }
+}
+export async function arkSetVoice(name) { if (isNative) { try { await ArkVoice.setVoice({ name: name || '' }); } catch {} } }
 export async function arkSpeak(text) {
   if (!text) return;
   if (isNative) { try { await ArkVoice.speak({ text }); } catch {} return; }
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-IN'; u.rate = 1.05;
+    const v = speechSynthesis.getVoices().filter((x) => /^en/i.test(x.lang)).find((x) => /\b(male|ravi|rishi|daniel|david|alex|fred|guy|mark)\b/i.test(x.name) && !/female/i.test(x.name));
+    if (v) u.voice = v; else u.pitch = 0.8;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch {}
 }

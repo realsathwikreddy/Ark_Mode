@@ -690,7 +690,12 @@ export function disableLock() {
 export function setLockBio(v) {
   setState((s) => ({ ...s, settings: { ...s.settings, lock: { ...s.settings.lock, bio: v } } }));
 }
+// Ark's microphone and Android's permission pop-ups briefly take the screen; that's not leaving the app.
+let lockHold = 0;
+export function holdLock(ms = 60000) { lockHold = Math.max(lockHold, now() + ms); }
+export function releaseLock(ms = 5000) { lockHold = now() + ms; }
 export function lockNow() {
+  if (now() < lockHold) return;
   if (state.settings.lock?.enabled && state.settings.lock.pinHash) setState((s) => ({ ...s, locked: true }), { save: false });
 }
 export function unlock() {

@@ -180,11 +180,18 @@ function App() {
   useEffect(() => {
     S.checkDay();
     const t = setInterval(S.checkDay, 60000);
+    // How long we were really away. Reset on return so an old timestamp can never lock the app
+    // (the WebView and Android don't always report leaving and coming back in pairs).
+    const cameBack = () => {
+      const away = awayAt.current ? Date.now() - awayAt.current : 0;
+      awayAt.current = 0;
+      if (away > 30000) S.lockNow();
+      return away;
+    };
+    const left = () => { if (!awayAt.current) awayAt.current = Date.now(); };
     const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        if (awayAt.current && Date.now() - awayAt.current > 30000) S.lockNow();
-        S.checkDay();
-      } else awayAt.current = Date.now();
+      if (document.visibilityState === 'visible') { cameBack(); S.checkDay(); }
+      else left();
     };
     document.addEventListener('visibilitychange', onVis);
     const subs = [];
@@ -210,13 +217,13 @@ function App() {
     if (isNative) {
       CapApp.addListener('appStateChange', ({ isActive }) => {
         if (isActive) {
-          if (awayAt.current && Date.now() - awayAt.current > 30000) S.lockNow();
+          const away = cameBack();
           S.checkDay();
-          if (Date.now() - awayAt.current > 10 * 60000) online();
+          if (away > 10 * 60000) online();
           S.startFeedWorker().then((n) => { if (n > 0) S.toast(`${n} new on Radar`, 'info'); });
         }
         else {
-          awayAt.current = Date.now(); S.flush();
+          left(); S.flush();
           // A downloaded update applies quietly when you leave the app.
         }
       }).then((h) => subs.push(h));

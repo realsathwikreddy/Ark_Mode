@@ -330,3 +330,9 @@
 .ark-rems { border-top: 1px solid var(--line); padding-top: 10px; }
 .ark-rem { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .ark-ring, .ark-core, .ark-msg { animation: none !important; } }
+/* the orb swells with your voice */
+.ark-orb.listening .ark-core { animation: none; transform: scale(calc(1 + var(--lv, 0) * .22)); transition: transform .08s linear; }
+.ark-orb.listening .ark-ring.r1 { border-color: rgba(var(--cy-rgb), calc(.4 + var(--lv, 0) * .6)); }
+.ark-msg.live .ark-bubble { opacity: .75; border-style: dashed; }
+.ark-voices { border: 1px solid var(--line); border-radius: 12px; padding: 10px; max-height: 30vh; overflow-y: auto; }
+.ark-voices .chip { font-size: 12px; padding: 4px 10px; }
